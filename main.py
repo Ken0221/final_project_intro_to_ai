@@ -90,16 +90,19 @@ def main():
                     person_img = frame[y1:y2, x1:x2]
                     if person_img.size > 0:
                         name, score = reid.identify_player(person_img)
+                        
+                        display_name = name if name else "Unknown"
                         if name:
                             current_player = name
                             player_score = score
-                            # Draw name
-                            cv2.putText(frame, f"Player: {name} ({score:.2f})", (x1, y1 - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+
+                        # Draw name and box (Always draw)
+                        cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
                             
-                            # Debug: Show what the Re-ID model sees
-                            cv2.imshow('Debug: Player Crop', person_img)
+                        # Debug: Show what the Re-ID model sees
+                        cv2.imshow('Debug: Player Crop', person_img)
 
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
