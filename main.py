@@ -5,15 +5,29 @@ from player_reid import PlayerReID
 import time
 
 def main():
+    # Camera Presets
+    # Camera Presets
+    CAMERA_PRESETS = {
+        'default': 0,
+        'pc': 0,
+        'mac': 1,
+        'window': 2,
+        'ivcam': 2
+    }
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Bowling Scoring System')
-    parser.add_argument('--source', type=str, default='0', 
-                        help='Camera source index (0, 1, 2...) or video file path')
+    parser.add_argument('--source', type=str, default='default', 
+                        help=f'Camera source index (0, 1...) or preset name ({", ".join(CAMERA_PRESETS.keys())}) or video file path')
     args = parser.parse_args()
 
-    # Determine source (convert to int if it's a number)
+    # Determine source
     source = args.source
-    if source.isdigit():
+    
+    # Check if source is a preset
+    if source in CAMERA_PRESETS:
+        source = CAMERA_PRESETS[source]
+    elif source.isdigit():
         source = int(source)
 
     # Initialize Player Re-ID
