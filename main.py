@@ -6,7 +6,6 @@ import time
 
 def main():
     # Camera Presets
-    # Camera Presets
     CAMERA_PRESETS = {
         'default': 0,
         'pc': 0,
@@ -19,6 +18,9 @@ def main():
     parser = argparse.ArgumentParser(description='Bowling Scoring System')
     parser.add_argument('--source', type=str, default='default', 
                         help=f'Camera source index (0, 1...) or preset name ({", ".join(CAMERA_PRESETS.keys())}) or video file path')
+    parser.add_argument('--backbone', type=str, default='resnet50',
+                        choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
+                        help='Backbone model for player re-identification')
     args = parser.parse_args()
 
     # Determine source
@@ -30,8 +32,8 @@ def main():
     elif source.isdigit():
         source = int(source)
 
-    # Initialize Player Re-ID
-    reid = PlayerReID()
+    # Initialize Player Re-ID with selected backbone
+    reid = PlayerReID(backbone=args.backbone)
     
     # Load the YOLOv8 model
     # 'yolov8n.pt' is the nano version, faster but less accurate. 
@@ -53,10 +55,19 @@ def main():
     # Adjust this value based on your specific bottles and camera angle
     STANDING_THRESHOLD = 1.2
 
+    print("\n" + "="*50)
     print("Starting Bowling Scoring System...")
-    print("Keys:")
-    print("  'r': Register new player")
+    print("="*50)
+    print("\nKeys:")
+    print("  'r': Register new player (can register same player multiple times)")
+    print("  'd': Toggle Debug mode (show all similarity scores)")
+    print("  'l': List all registered players")
+    print("  'c': Delete (Clear) a player")
     print("  'q': Quit")
+    print("="*50 + "\n")
+
+    # State variables
+    debug_mode = False
 
     # Warm-up: sometimes the first few frames are empty or the camera is initializing
     for _ in range(10):
@@ -81,6 +92,7 @@ def main():
         # Detect persons (class 0 in COCO)
         current_player = "Unknown"
         player_score = 0.0
+        all_scores = {}
         
         for result in results:
             for box in result.boxes:
@@ -89,7 +101,8 @@ def main():
                     # Crop person
                     person_img = frame[y1:y2, x1:x2]
                     if person_img.size > 0:
-                        name, score = reid.identify_player(person_img)
+                        name, score, scores_dict = reid.identify_player(person_img)
+                        all_scores = scores_dict
                         
                         display_name = name if name else "Unknown"
                         if name:
@@ -100,6 +113,15 @@ def main():
                         cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+                        
+                        # Debug mode: show all scores on frame
+                        if debug_mode and scores_dict:
+                            y_offset = y1 + 20
+                            for p_name, p_scores in scores_dict.items():
+                                debug_text = f"{p_name}: {p_scores['combined']:.2f} (max:{p_scores['max']:.2f}, mean:{p_scores['mean']:.2f})"
+                                cv2.putText(frame, debug_text, (x1, y_offset), 
+                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                                y_offset += 18
                             
                         # Debug: Show what the Re-ID model sees
                         cv2.imshow('Debug: Player Crop', person_img)
@@ -107,6 +129,11 @@ def main():
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
+        
+        # Show debug mode indicator
+        if debug_mode:
+            cv2.putText(frame, "[DEBUG MODE]", (20, 140), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
         standing_count = 0
         
@@ -159,14 +186,16 @@ def main():
             break
         elif key == ord('r'):
             # Registration Mode
+            print("\n" + "="*40)
+            print("PLAYER REGISTRATION")
+            print("="*40)
             print("Enter player name in terminal:")
-            # Temporarily close window or just wait?
-            # cv2.waitKey(1) might not be enough to update UI if we block on input
-            # Let's just block.
-            player_name = input("Player Name: ")
+            print("(Enter existing name to add more samples)")
+            player_name = input("Player Name: ").strip()
             if player_name:
-                print(f"Please stand in front of the camera for {player_name}...")
-                time.sleep(2) # Give time to pose
+                print(f"\nPlease stand in front of the camera for {player_name}...")
+                print("Capturing multiple frames for better accuracy...")
+                time.sleep(2)  # Give time to pose
                 
                 # Capture a fresh frame
                 ret, reg_frame = cap.read()
@@ -176,20 +205,50 @@ def main():
                     found_person = False
                     for result in reg_results:
                         for box in result.boxes:
-                            if int(box.cls[0]) == 0: # Person
+                            if int(box.cls[0]) == 0:  # Person
                                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                                 person_crop = reg_frame[y1:y2, x1:x2]
                                 if person_crop.size > 0:
-                                    reid.register_player(player_name, person_crop)
+                                    sample_count = reid.register_player(
+                                        player_name, 
+                                        person_crop, 
+                                        capture_multiple=True,
+                                        cap=cap,
+                                        model=model
+                                    )
                                     found_person = True
-                                    print("Registration successful!")
+                                    print(f"\nRegistration successful! Added {sample_count} samples.")
+                                    print("="*40 + "\n")
                                     break
-                        if found_person: break
+                        if found_person: 
+                            break
                     
                     if not found_person:
                         print("No person detected for registration. Try again.")
                 else:
                     print("Failed to capture registration frame.")
+        
+        elif key == ord('d'):
+            # Toggle debug mode
+            debug_mode = not debug_mode
+            reid.set_debug_mode(debug_mode)
+        
+        elif key == ord('l'):
+            # List all registered players
+            reid.list_players()
+        
+        elif key == ord('c'):
+            # Delete a player
+            print("\n" + "="*40)
+            print("DELETE PLAYER")
+            print("="*40)
+            reid.list_players()
+            player_name = input("Enter player name to delete (or blank to cancel): ").strip()
+            if player_name:
+                confirm = input(f"Are you sure you want to delete '{player_name}'? (y/n): ").strip().lower()
+                if confirm == 'y':
+                    reid.delete_player(player_name)
+            print("="*40 + "\n")
 
     # Release resources
     cap.release()

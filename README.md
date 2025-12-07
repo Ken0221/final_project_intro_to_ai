@@ -1,32 +1,42 @@
 # AI-Powered Automatic Scoring System for Toy Bowling
 
-This project implements an automatic scoring system for a toy bowling game using computer vision. It utilizes **YOLOv8** for object detection (bottles and persons) and **MobileNetV2** for player re-identification (Re-ID).
+This project implements an automatic scoring system for a toy bowling game using computer vision. It utilizes **YOLOv8** for object detection (bottles and persons) and **ResNet50** (or other backbones) for player re-identification (Re-ID).
 
 ## Features
 
-*   **Real-time Bottle Detection**: Detects bowling bottles and determines their status (standing or fallen) based on aspect ratio.
-*   **Automatic Scoring**: Counts the number of standing bottles in real-time.
-*   **Player Identification**: Identifies players using a One-Shot Learning approach with MobileNetV2.
-*   **Player Registration**: Allows registering new players on the fly using the camera.
-*   **Visual Feedback**: Draws bounding boxes and labels for bottles and players on the video feed.
+### Core Functionality
+- **Real-time Bottle Detection**: Detects bowling bottles and determines their status (standing or fallen) based on aspect ratio.
+- **Automatic Scoring**: Counts the number of standing bottles in real-time.
+- **Advanced Player Identification**: Identifies players using deep learning with multiple backbone options.
+- **Visual Feedback**: Draws bounding boxes and labels for bottles and players on the video feed.
+
+### Player Re-ID Improvements
+- **Multiple Backbone Models**: Choose from ResNet50 (default), ResNet101, ConvNeXt-Small, or MobileNetV2
+- **Multi-Sample Registration**: Each registration captures multiple frames with data augmentation (up to 15 samples per registration)
+- **Enhanced Similarity Calculation**: Combines max and mean similarity scores with margin-based thresholding
+- **Incremental Registration**: Register the same player multiple times to improve accuracy
+- **Debug Mode**: View detailed similarity scores for all registered players
 
 ## Requirements
 
-*   Python 3.8+
-*   Webcam or video file source
+- Python 3.8+
+- Webcam or video file source
+- CUDA-capable GPU (optional, for faster inference)
 
 ## Installation
 
-1.  Clone the repository (if applicable).
-2.  Install the required dependencies:
+1. Clone the repository (if applicable).
+2. Install the required dependencies:
 
     ```bash
     pip install -r requirements.txt
     ```
 
-    *Note: `requirements.txt` includes `opencv-python`, `ultralytics`, `torch`, and `torchvision`.*
+    *Note: `requirements.txt` includes `opencv-python`, `ultralytics`, `torch`, `torchvision`, and other dependencies.*
 
 ## Usage
+
+### Basic Usage
 
 Run the main script to start the system:
 
@@ -34,26 +44,122 @@ Run the main script to start the system:
 python main.py --source 0
 ```
 
-*   Replace `0` with your camera index or a video file path if needed.
-*   The YOLOv8 nano model (`yolov8n.pt`) will be downloaded automatically on the first run.
+- Replace `0` with your camera index or a video file path if needed.
+- The YOLOv8 nano model (`yolov8n.pt`) will be downloaded automatically on the first run.
 
-### Controls
+### Advanced Options
 
-*   **`r`**: Enter **Registration Mode**.
-    *   You will be prompted to enter a player name in the terminal.
-    *   Stand in front of the camera to capture your reference image.
-*   **`q`**: Quit the application.
+```bash
+# Use different backbone models
+python main.py --source 0 --backbone resnet50      # Default, best accuracy
+python main.py --source 0 --backbone resnet101     # Higher accuracy, slower
+python main.py --source 0 --backbone convnext_small # Good balance
+python main.py --source 0 --backbone mobilenetv2   # Fastest, lower accuracy
+
+# Use camera presets
+python main.py --source default  # Camera 0
+python main.py --source mac      # Camera 1
+python main.py --source ivcam    # Camera 2
+
+# Use video file
+python main.py --source path/to/video.mp4
+```
+
+### Keyboard Controls
+
+| Key | Function |
+|-----|----------|
+| `r` | **Register Player** - Enter player name and capture reference images (can register same player multiple times) |
+| `d` | **Debug Mode** - Toggle display of all similarity scores for each detected person |
+| `l` | **List Players** - Show all registered players and their sample counts |
+| `c` | **Clear/Delete Player** - Remove a registered player from the database |
+| `q` | **Quit** - Exit the application |
+
+### Registration Workflow
+
+1. Press `r` to enter registration mode
+2. Enter the player's name in the terminal
+3. Stand in front of the camera
+4. The system will automatically:
+   - Capture 3 frames
+   - Generate 5 augmented features per frame (original + 4 augmentations)
+   - Store up to 15 samples total
+5. You can register the same player multiple times to add more samples
 
 ## Project Structure
 
-*   `main.py`: The main entry point. Handles video capture, YOLO inference, and display logic.
-*   `player_reid.py`: Contains the `PlayerReID` class for feature extraction and player matching using MobileNetV2.
-*   `check_cameras.py`: Utility script to list available camera sources.
-*   `collect_data.py`: Script for collecting training/testing data (if needed).
-*   `player_db/`: Directory where registered player feature vectors (`.npy` files) are stored.
-*   `datasets/`: Directory for datasets (if applicable).
+- `main.py`: The main entry point. Handles video capture, YOLO inference, and display logic.
+- `player_reid.py`: Contains the `PlayerReID` class for feature extraction and player matching with multiple backbone support.
+- `check_cameras.py`: Utility script to list available camera sources.
+- `collect_data.py`: Script for collecting training/testing data (if needed).
+- `player_db/`: Directory where registered player feature vectors (`.npy` files) are stored.
+- `requirements.txt`: Python package dependencies.
 
 ## How it Works
 
-1.  **Bottle Detection**: YOLOv8 detects bottles. The system calculates the aspect ratio (height/width) of each bounding box. If the ratio is above a threshold (default 1.2), the bottle is considered "Standing"; otherwise, it is "Fallen".
-2.  **Player Re-ID**: YOLOv8 detects persons. The detected person image is cropped and passed to a pre-trained MobileNetV2 (without the classifier) to extract a feature vector. This vector is compared with registered players in `player_db` using cosine similarity.
+### Bottle Detection
+YOLOv8 detects bottles in each frame. The system calculates the aspect ratio (height/width) of each bounding box. If the ratio is above a threshold (default 1.2), the bottle is considered "Standing"; otherwise, it is "Fallen".
+
+### Player Re-Identification
+
+1. **Detection**: YOLOv8 detects persons in the frame
+2. **Feature Extraction**: The detected person image is cropped and passed to a deep learning backbone (ResNet50 by default) to extract a high-dimensional feature vector (2048-dim for ResNet50)
+3. **Matching**: The feature vector is compared with all registered players using:
+   - **Cosine similarity** for each stored sample
+   - **Combined score**: `0.7 × max_similarity + 0.3 × mean_similarity`
+   - **Margin-based thresholding**: If two players have similar scores (margin < 0.05), the threshold is raised to 0.65
+4. **Identification**: The player with the highest combined score above the threshold is identified
+
+### Data Augmentation (Registration)
+
+During registration, each captured frame is augmented using:
+- Original image
+- Color jitter (brightness/contrast variation)
+- Center crop with resize
+- Horizontal flip
+- Random affine transformation (rotation + translation)
+
+This creates robust feature representations that work under different lighting and pose conditions.
+
+## Performance Tips
+
+- **GPU Acceleration**: The system automatically uses CUDA if available
+- **Model Selection**: 
+  - Use `resnet50` for best accuracy
+  - Use `mobilenetv2` if running on CPU or need faster inference
+- **Registration**: Register each player 2-3 times from different angles for best results
+- **Lighting**: Ensure consistent lighting between registration and identification
+
+## Troubleshooting
+
+### Player Not Recognized
+- Register the player multiple times (press `r` again with the same name)
+- Ensure good lighting conditions
+- Try using a higher-capacity backbone (`--backbone resnet101`)
+
+### Slow Performance
+- Switch to a lighter backbone (`--backbone mobilenetv2`)
+- Ensure CUDA is properly installed for GPU acceleration
+- Reduce camera resolution if possible
+
+### Wrong Player Identified
+- Enable debug mode (`d` key) to see similarity scores
+- Delete incorrect registrations (`c` key)
+- Re-register players with more samples
+
+## Migration from Old Version
+
+If you have existing player data from the old MobileNetV2 version:
+- The new system is **not compatible** with old `.npy` files (different feature dimensions)
+- Recommended: Delete `player_db/*.npy` and re-register all players
+- The system will automatically convert old single-sample files to multi-sample format if dimensions match
+
+## License
+
+[Specify your license here]
+
+## Acknowledgments
+
+- YOLOv8 by Ultralytics
+- PyTorch and torchvision for deep learning models
+- OpenCV for computer vision operations
