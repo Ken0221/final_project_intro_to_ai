@@ -6,7 +6,10 @@ class YOLODetector:
         # Load the YOLOv8 model
         # 'yolov8n.pt' is the nano version, faster but less accurate.
         # It will be downloaded automatically on first run.
+        # Use GPU 0 if available, explicitly
         self.model = YOLO(model_path)
+        self.model.to('cuda:0')
+        print(f"YOLO Detector initialized on device: {self.model.device}")
         
         # COCO class IDs
         self.CLASS_PERSON = 0
