@@ -1,7 +1,7 @@
 import cv2
-from ultralytics import YOLO
 import argparse
 from player_reid import PlayerReID
+from yolo_detection import YOLODetector
 import time
 
 def main():
@@ -35,10 +35,8 @@ def main():
     # Initialize Player Re-ID with selected backbone
     reid = PlayerReID(backbone=args.backbone)
     
-    # Load the YOLOv8 model
-    # 'yolov8n.pt' is the nano version, faster but less accurate. 
-    # It will be downloaded automatically on first run.
-    model = YOLO('yolov8n.pt')
+    # Initialize YOLO Detector
+    detector = YOLODetector()
 
     # Open the webcam
     print(f"Opening camera source: {source}")
@@ -48,9 +46,6 @@ def main():
         print("Error: Could not open webcam.")
         return
 
-    # COCO class ID for 'bottle' is 39
-    BOTTLE_CLASS_ID = 39
-    
     # Aspect ratio threshold for standing bottles (height / width)
     # Adjust this value based on your specific bottles and camera angle
     STANDING_THRESHOLD = 1.2
@@ -84,47 +79,41 @@ def main():
             continue
 
         # Run YOLOv8 inference on the frame
-        results = model(frame, verbose=False)
+        results = detector.detect(frame)
 
         # ---------------------------
         # Player Identification Logic
         # ---------------------------
-        # Detect persons (class 0 in COCO)
         current_player = "Unknown"
         player_score = 0.0
-        all_scores = {}
         
-        for result in results:
-            for box in result.boxes:
-                if int(box.cls[0]) == 0: # Person
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    # Crop person
-                    person_img = frame[y1:y2, x1:x2]
-                    if person_img.size > 0:
-                        name, score, scores_dict = reid.identify_player(person_img)
-                        all_scores = scores_dict
-                        
-                        display_name = name if name else "Unknown"
-                        if name:
-                            current_player = name
-                            player_score = score
+        # Get persons using helper
+        persons = detector.get_person_crops(frame, results)
+        
+        for person_img, (x1, y1, x2, y2) in persons:
+            name, score, scores_dict = reid.identify_player(person_img)
+            
+            display_name = name if name else "Unknown"
+            if name:
+                current_player = name
+                player_score = score
 
-                        # Draw name and box (Always draw)
-                        cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
-                        
-                        # Debug mode: show all scores on frame
-                        if debug_mode and scores_dict:
-                            y_offset = y1 + 20
-                            for p_name, p_scores in scores_dict.items():
-                                debug_text = f"{p_name}: {p_scores['combined']:.2f} (max:{p_scores['max']:.2f}, mean:{p_scores['mean']:.2f})"
-                                cv2.putText(frame, debug_text, (x1, y_offset), 
-                                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                                y_offset += 18
-                            
-                        # Debug: Show what the Re-ID model sees
-                        cv2.imshow('Debug: Player Crop', person_img)
+            # Draw name and box (Always draw)
+            cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+            
+            # Debug mode: show all scores on frame
+            if debug_mode and scores_dict:
+                y_offset = y1 + 20
+                for p_name, p_scores in scores_dict.items():
+                    debug_text = f"{p_name}: {p_scores['combined']:.2f} (max:{p_scores['max']:.2f}, mean:{p_scores['mean']:.2f})"
+                    cv2.putText(frame, debug_text, (x1, y_offset), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                    y_offset += 18
+                
+            # Debug: Show what the Re-ID model sees
+            cv2.imshow('Debug: Player Crop', person_img)
 
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
@@ -137,40 +126,39 @@ def main():
 
         standing_count = 0
         
-        # Process detections
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                # Check if the detected object is a bottle
-                cls_id = int(box.cls[0])
-                if cls_id == BOTTLE_CLASS_ID:
-                    # Get bounding box coordinates
-                    x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    
-                    # Calculate width and height
-                    w = x2 - x1
-                    h = y2 - y1
-                    
-                    # Calculate aspect ratio
-                    aspect_ratio = h / w if w > 0 else 0
-                    
-                    # Determine if standing
-                    is_standing = aspect_ratio > STANDING_THRESHOLD
-                    
-                    if is_standing:
-                        standing_count += 1
-                        color = (0, 255, 0) # Green for standing
-                        label = f"Standing ({aspect_ratio:.2f})"
-                    else:
-                        color = (0, 0, 255) # Red for fallen
-                        label = f"Fallen ({aspect_ratio:.2f})"
+        # ---------------------------
+        # Bottle Detection Logic
+        # ---------------------------
+        bottles = detector.get_bottles(results)
+        
+        for box in bottles:
+            # Get bounding box coordinates
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            
+            # Calculate width and height
+            w = x2 - x1
+            h = y2 - y1
+            
+            # Calculate aspect ratio
+            aspect_ratio = h / w if w > 0 else 0
+            
+            # Determine if standing
+            is_standing = aspect_ratio > STANDING_THRESHOLD
+            
+            if is_standing:
+                standing_count += 1
+                color = (0, 255, 0) # Green for standing
+                label = f"Standing ({aspect_ratio:.2f})"
+            else:
+                color = (0, 0, 255) # Red for fallen
+                label = f"Fallen ({aspect_ratio:.2f})"
 
-                    # Draw bounding box
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                    
-                    # Put label
-                    cv2.putText(frame, label, (x1, y1 - 10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            # Draw bounding box
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            
+            # Put label
+            cv2.putText(frame, label, (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
         # Display the total count
         cv2.putText(frame, f"Standing Bottles: {standing_count}", (20, 50), 
@@ -201,29 +189,23 @@ def main():
                 ret, reg_frame = cap.read()
                 if ret:
                     # Detect person in this frame to crop
-                    reg_results = model(reg_frame, verbose=False)
-                    found_person = False
-                    for result in reg_results:
-                        for box in result.boxes:
-                            if int(box.cls[0]) == 0:  # Person
-                                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                person_crop = reg_frame[y1:y2, x1:x2]
-                                if person_crop.size > 0:
-                                    sample_count = reid.register_player(
-                                        player_name, 
-                                        person_crop, 
-                                        capture_multiple=True,
-                                        cap=cap,
-                                        model=model
-                                    )
-                                    found_person = True
-                                    print(f"\nRegistration successful! Added {sample_count} samples.")
-                                    print("="*40 + "\n")
-                                    break
-                        if found_person: 
-                            break
+                    reg_results = detector.detect(reg_frame)
+                    reg_persons = detector.get_person_crops(reg_frame, reg_results)
                     
-                    if not found_person:
+                    if reg_persons:
+                        # Use the first person found
+                        person_crop, _ = reg_persons[0]
+                        
+                        sample_count = reid.register_player(
+                            player_name, 
+                            person_crop, 
+                            capture_multiple=True,
+                            cap=cap,
+                            model=detector.model 
+                        )
+                        print(f"\nRegistration successful! Added {sample_count} samples.")
+                        print("="*40 + "\n")
+                    else:
                         print("No person detected for registration. Try again.")
                 else:
                     print("Failed to capture registration frame.")
