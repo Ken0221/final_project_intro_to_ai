@@ -50,7 +50,19 @@ python main.py --source 0
 ### Advanced Options
 
 ```bash
-# Use different backbone models
+# Use custom resolution
+python main.py --source 0 --resolution 1080    # 1920x1080 (Default)
+python main.py --source 0 --resolution 2160    # 4K (3840x2160)
+python main.py --source 0 --resolution 720     # 1280x720
+
+# Use different detection models (supports RT-DETR)
+python main.py --source 0 --model yolov8m      # Medium model
+python main.py --source 0 --model rtdetr-l     # RT-DETR Large model
+
+# Show FPS and debug info
+python main.py --source 0 --show_everything 1
+
+# Use different backbone models for Re-ID
 python main.py --source 0 --backbone resnet50      # Default, best accuracy
 python main.py --source 0 --backbone resnet101     # Higher accuracy, slower
 python main.py --source 0 --backbone convnext_small # Good balance

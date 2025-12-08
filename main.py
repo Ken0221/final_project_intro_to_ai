@@ -29,6 +29,9 @@ def main():
                         help='Debug mode')
     parser.add_argument('--show_everything', type=bool, default=False,
                         help='Show everything')
+    parser.add_argument('--resolution', type=int, default=1080,
+                        choices=[480, 720, 1080, 1440, 2160],
+                        help='Camera resolution: 480, 720, 1080, 1440, 2160')
     args = parser.parse_args()
 
     # State variables
@@ -53,6 +56,20 @@ def main():
     # Open the webcam
     print(f"Opening camera source: {source}")
     cap = cv2.VideoCapture(source)
+    
+    # Resolution Mapping
+    RESOLUTION_MAP = {
+        480: (640, 480),
+        720: (1280, 720),
+        1080: (1920, 1080),
+        1440: (2560, 1440),
+        2160: (3840, 2160)
+    }
+    
+    target_width, target_height = RESOLUTION_MAP.get(args.resolution, (1920, 1080))
+    print(f"Setting resolution to {target_width}x{target_height}...")
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_height)
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
