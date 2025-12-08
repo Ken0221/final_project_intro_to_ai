@@ -1,7 +1,7 @@
 import cv2
 import argparse
 from player_reid import PlayerReID
-from yolo_detection import YOLODetector
+from yoloion import YOLODetector
 import time
 
 def main():
@@ -36,7 +36,7 @@ def main():
     reid = PlayerReID(backbone=args.backbone)
     
     # Initialize YOLO Detector
-    detector = YOLODetector()
+    yolo = YOLODetector()
 
     # Open the webcam
     print(f"Opening camera source: {source}")
@@ -79,7 +79,7 @@ def main():
             continue
 
         # Run YOLOv8 inference on the frame
-        results = detector.detect(frame)
+        results = yolo.detect(frame)
 
         # ---------------------------
         # Player Identification Logic
@@ -88,7 +88,7 @@ def main():
         player_score = 0.0
         
         # Get persons using helper
-        persons = detector.get_person_crops(frame, results)
+        persons = yolo.get_person_crops(frame, results)
         
         for person_img, (x1, y1, x2, y2) in persons:
             name, score, scores_dict = reid.identify_player(person_img)
@@ -129,7 +129,7 @@ def main():
         # ---------------------------
         # Bottle Detection Logic
         # ---------------------------
-        bottles = detector.get_bottles(results)
+        bottles = yolo.get_bottles(results)
         
         for box in bottles:
             # Get bounding box coordinates
@@ -189,8 +189,8 @@ def main():
                 ret, reg_frame = cap.read()
                 if ret:
                     # Detect person in this frame to crop
-                    reg_results = detector.detect(reg_frame)
-                    reg_persons = detector.get_person_crops(reg_frame, reg_results)
+                    reg_results = yolo.detect(reg_frame)
+                    reg_persons = yolo.get_person_crops(reg_frame, reg_results)
                     
                     if reg_persons:
                         # Use the first person found
@@ -201,7 +201,7 @@ def main():
                             person_crop, 
                             capture_multiple=True,
                             cap=cap,
-                            model=detector.model 
+                            model=yolo.model 
                         )
                         print(f"\nRegistration successful! Added {sample_count} samples.")
                         print("="*40 + "\n")
