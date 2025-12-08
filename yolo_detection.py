@@ -8,8 +8,14 @@ class YOLODetector:
         # It will be downloaded automatically on first run.
         # Use GPU 0 if available, explicitly
         self.model = YOLO(model_path)
-        self.model.to('cuda:0')
-        print(f"YOLO Detector initialized on device: {self.model.device}")
+        
+        # Check if CUDA is available before forcing it
+        import torch
+        if torch.cuda.is_available():
+            self.model.to('cuda:0')
+            print(f"YOLO Detector initialized on device: {self.model.device}")
+        else:
+            print(f"YOLO Detector initialized on device: {self.model.device} (CPU)")
         
         # COCO class IDs
         self.CLASS_PERSON = 0
