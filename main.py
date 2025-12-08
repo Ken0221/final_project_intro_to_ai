@@ -1,7 +1,7 @@
 import cv2
 import argparse
 from player_reid import PlayerReID
-from yoloion import YOLODetector
+from yolo_detection import YOLODetector
 import time
 
 def main():
@@ -21,7 +21,12 @@ def main():
     parser.add_argument('--backbone', type=str, default='resnet50',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
                         help='Backbone model for player re-identification')
+    parser.add_argument('--debug_mode', type=bool, default=False,
+                        help='Debug mode')
     args = parser.parse_args()
+
+    # State variables
+    debug_mode = args.debug_mode
 
     # Determine source
     source = args.source
@@ -60,9 +65,6 @@ def main():
     print("  'c': Delete (Clear) a player")
     print("  'q': Quit")
     print("="*50 + "\n")
-
-    # State variables
-    debug_mode = False
 
     # Warm-up: sometimes the first few frames are empty or the camera is initializing
     for _ in range(10):
@@ -113,7 +115,7 @@ def main():
                     y_offset += 18
                 
             # Debug: Show what the Re-ID model sees
-            cv2.imshow('Debug: Player Crop', person_img)
+            # cv2.imshow('Debug: Player Crop', person_img)
 
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
