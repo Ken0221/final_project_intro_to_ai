@@ -46,3 +46,16 @@ class YOLODetector:
                 if int(box.cls[0]) == self.CLASS_BOTTLE:
                     bottles.append(box)
         return bottles
+
+    def get_everything_attr(self, results):
+        """
+        Extract all attributes from results.
+        Returns a list of (attr, box_coords) tuples.
+        box_coords = (x1, y1, x2, y2)
+        """
+        attrs = []
+        for result in results:
+            for box in result.boxes:
+                cls_name = self.model.names[int(box.cls[0])]
+                attrs.append((cls_name, box.xyxy[0]))
+        return attrs

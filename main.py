@@ -18,15 +18,22 @@ def main():
     parser = argparse.ArgumentParser(description='Bowling Scoring System')
     parser.add_argument('--source', type=str, default='default', 
                         help=f'Camera source index (0, 1...) or preset name ({", ".join(CAMERA_PRESETS.keys())}) or video file path')
+    parser.add_argument('--model', type=str, default='yolov8n',
+                        choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
+                                 'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x'],
+                        help='YOLO model to use')
     parser.add_argument('--backbone', type=str, default='resnet50',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
                         help='Backbone model for player re-identification')
     parser.add_argument('--debug_mode', type=bool, default=False,
                         help='Debug mode')
+    parser.add_argument('--show_everything', type=bool, default=False,
+                        help='Show everything')
     args = parser.parse_args()
 
     # State variables
     debug_mode = args.debug_mode
+    show_everything = args.show_everything
 
     # Determine source
     source = args.source
@@ -41,7 +48,7 @@ def main():
     reid = PlayerReID(backbone=args.backbone)
     
     # Initialize YOLO Detector
-    yolo = YOLODetector()
+    yolo = YOLODetector(model_path=f"{args.model}.pt")
 
     # Open the webcam
     print(f"Opening camera source: {source}")
@@ -83,6 +90,13 @@ def main():
         # Run YOLOv8 inference on the frame
         results = yolo.detect(frame)
 
+        if show_everything:
+            attrs = yolo.get_everything_attr(results)
+            for cls, box_coords in attrs:
+                x1, y1, x2, y2 = map(int, box_coords)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"{cls}", (x1, y1 - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
         # ---------------------------
         # Player Identification Logic
         # ---------------------------
