@@ -29,9 +29,7 @@ def main():
                         help='Debug mode')
     parser.add_argument('--show_everything', type=bool, default=False,
                         help='Show everything')
-    parser.add_argument('--resolution', type=int, default=1080,
-                        choices=[480, 720, 1080, 1440, 2160],
-                        help='Camera resolution: 480, 720, 1080, 1440, 2160')
+
     args = parser.parse_args()
 
     # State variables
@@ -57,19 +55,14 @@ def main():
     print(f"Opening camera source: {source}")
     cap = cv2.VideoCapture(source)
     
-    # Resolution Mapping
-    RESOLUTION_MAP = {
-        480: (640, 480),
-        720: (1280, 720),
-        1080: (1920, 1080),
-        1440: (2560, 1440),
-        2160: (3840, 2160)
-    }
+    # Set camera to maximum resolution to ensure largest Field of View (FOV)
+    # Setting a very high value forces OpenCV/Camera to fall back to the maximum supported resolution
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 10000)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 10000)
     
-    target_width, target_height = RESOLUTION_MAP.get(args.resolution, (1920, 1080))
-    print(f"Setting resolution to {target_width}x{target_height}...")
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, target_width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, target_height)
+    actual_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    print(f"Camera FOV maximized. Resolution: {int(actual_width)}x{int(actual_height)}")
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
@@ -109,13 +102,12 @@ def main():
         curr_time = time.time()
         fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
         prev_time = curr_time
+        cv2.putText(frame, f"FPS: {int(fps)}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # Run YOLOv8 inference on the frame
         results = yolo.detect(frame)
 
         if show_everything:
-            cv2.putText(frame, f"FPS: {int(fps)}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            
             attrs = yolo.get_everything_attr(results)
             for cls, box_coords in attrs:
                 x1, y1, x2, y2 = map(int, box_coords)
