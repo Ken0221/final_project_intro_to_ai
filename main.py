@@ -97,6 +97,7 @@ def main():
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{cls}", (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                            
         # ---------------------------
         # Player Identification Logic
         # ---------------------------
@@ -147,34 +148,13 @@ def main():
         # ---------------------------
         bottles = yolo.get_bottles(results)
         
-        for box in bottles:
-            # Get bounding box coordinates
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            
-            # Calculate width and height
-            w = x2 - x1
-            h = y2 - y1
-            
-            # Calculate aspect ratio
-            aspect_ratio = h / w if w > 0 else 0
-            
-            # Determine if standing
-            is_standing = aspect_ratio > STANDING_THRESHOLD
-            
-            if is_standing:
-                standing_count += 1
-                color = (0, 255, 0) # Green for standing
-                label = f"Standing ({aspect_ratio:.2f})"
-            else:
-                color = (0, 0, 255) # Red for fallen
-                label = f"Fallen ({aspect_ratio:.2f})"
-
+        for (x1, y1, x2, y2) in bottles:
             # Draw bounding box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             
             # Put label
-            cv2.putText(frame, label, (x1, y1 - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(frame, "Bottle", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # Display the total count
         cv2.putText(frame, f"Standing Bottles: {standing_count}", (20, 50), 

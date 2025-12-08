@@ -44,7 +44,8 @@ class YOLODetector:
         for result in results:
             for box in result.boxes:
                 if int(box.cls[0]) == self.CLASS_BOTTLE:
-                    bottles.append(box)
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    bottles.append((x1, y1, x2, y2))
         return bottles
 
     def get_everything_attr(self, results):
