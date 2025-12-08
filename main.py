@@ -155,6 +155,8 @@ def main():
             # Put label
             cv2.putText(frame, "Bottle", (x1, y1 - 10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        # Future work: How to determine if a bottle is standing or fallen?
 
         # Display the total count
         cv2.putText(frame, f"Standing Bottles: {standing_count}", (20, 50), 
