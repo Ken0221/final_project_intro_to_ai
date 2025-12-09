@@ -67,13 +67,16 @@ class PlayerReID:
         ])
         
         # Augmentation transforms for registration
+        # Enhanced for "Fixed Environment" usage:
+        # We removed ColorJitter (lighting is constant) and Affine (too much noise).
+        # We keep Crop (distance variation) and Flip (angle variation).
         self.augment_transforms = [
-            transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.ColorJitter(brightness=0.2, contrast=0.2),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]),
+            # transforms.Compose([
+            #     transforms.Resize((224, 224)),
+            #     transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ]),
             transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.CenterCrop(224),
@@ -86,12 +89,12 @@ class PlayerReID:
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]),
-            transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomAffine(degrees=10, translate=(0.1, 0.1)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]),
+            # transforms.Compose([
+            #     transforms.Resize((224, 224)),
+            #     transforms.RandomAffine(degrees=10, translate=(0.1, 0.1)),
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ]),
         ]
 
         # Test-time augmentation for inference (mild only)
@@ -258,7 +261,7 @@ class PlayerReID:
         Each frame generates multiple augmented features.
         """
         frames_to_process = [img_bgr]
-        
+        '''
         # Capture additional frames if possible
         if capture_multiple and cap is not None and model is not None:
             import time
@@ -269,21 +272,42 @@ class PlayerReID:
                 if ret:
                     # Detect persons and keep the largest one (registration target)
                     results = model(frame, verbose=False)
-                    best_box = None
-                    best_area = 0
+                    # Find largest person in this frame
+                    best_person_crop = None
+                    max_area = 0
+                    
                     for result in results:
                         for box in result.boxes:
                             if int(box.cls[0]) == 0:  # Person
                                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                area = max(0, x2 - x1) * max(0, y2 - y1)
-                                if area > best_area:
-                                    best_area = area
-                                    best_box = (x1, y1, x2, y2)
-                    if best_box is not None:
-                        x1, y1, x2, y2 = best_box
-                        person_crop = frame[y1:y2, x1:x2]
-                        if person_crop.size > 0:
-                            frames_to_process.append(person_crop)
+                                area = (x2 - x1) * (y2 - y1)
+                                if area > max_area:
+                                    max_area = area
+                                    person_crop = frame[y1:y2, x1:x2]
+                                    if person_crop.size > 0:
+                                        best_person_crop = person_crop
+                    
+                    if best_person_crop is not None:
+                        frames_to_process.append(best_person_crop)
+        '''
+        # Extract features from all frames with augmentation
+        for frame in frames_to_process:
+            features_list = self.extract_features(frame, use_augment=True)
+            all_features.extend(features_list)
+        
+        # Add to existing player or create new
+        if name in self.known_players:
+            self.known_players[name].extend(all_features)
+            print(f"Added {len(all_features)} samples to existing player: {name}")
+        else:
+            self.known_players[name] = all_features
+            print(f"Registered new player: {name} with {len(all_features)} samples")
+        
+        # Save to disk (as multiple features)
+        features_array = np.array(self.known_players[name])
+        np.save(os.path.join(self.db_path, f"{name}.npy"), features_array)
+        
+        return len(all_features)
 
         return self.register_player_from_samples(name, frames_to_process)
 
@@ -296,10 +320,7 @@ class PlayerReID:
         if not self.known_players:
             return None, 0.0, {}
 
-        target_features = self.extract_features(img_bgr, tta=True)
-        target_deep, target_color = self._split_feature(target_features)
-        target_deep_norm = np.linalg.norm(target_deep) + 1e-12
-        target_color_norm = np.linalg.norm(target_color) + 1e-12 if target_color is not None else 0.0
+        target_features = self.extract_features(img_bgr)
         
         scores_dict = {}  # For debug mode
         best_combined_score = -1.0
@@ -310,17 +331,7 @@ class PlayerReID:
             # Calculate similarity with all registered features for this player
             similarities = []
             for features in features_list:
-                deep_feat, color_feat = self._split_feature(features)
-                deep_norm = np.linalg.norm(deep_feat) + 1e-12
-                deep_sim = float(np.dot(target_deep, deep_feat) / (target_deep_norm * deep_norm))
-
-                if color_feat is not None and target_color is not None and target_color_norm > 0:
-                    color_norm = np.linalg.norm(color_feat) + 1e-12
-                    color_sim = float(np.dot(target_color, color_feat) / (target_color_norm * color_norm))
-                    score = self.deep_sim_weight * deep_sim + (1.0 - self.deep_sim_weight) * color_sim
-                else:
-                    score = deep_sim
-
+                score = np.dot(target_features, features) / (np.linalg.norm(target_features) * np.linalg.norm(features))
                 similarities.append(score)
             
             # Combined score: 70% max similarity + 30% mean similarity
