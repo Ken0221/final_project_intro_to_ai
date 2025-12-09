@@ -56,13 +56,16 @@ class PlayerReID:
         ])
         
         # Augmentation transforms for registration
+        # Enhanced for "Fixed Environment" usage:
+        # We removed ColorJitter (lighting is constant) and Affine (too much noise).
+        # We keep Crop (distance variation) and Flip (angle variation).
         self.augment_transforms = [
-            transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.ColorJitter(brightness=0.2, contrast=0.2),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]),
+            # transforms.Compose([
+            #     transforms.Resize((224, 224)),
+            #     transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ]),
             transforms.Compose([
                 transforms.Resize((256, 256)),
                 transforms.CenterCrop(224),
@@ -75,12 +78,12 @@ class PlayerReID:
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]),
-            transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.RandomAffine(degrees=10, translate=(0.1, 0.1)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]),
+            # transforms.Compose([
+            #     transforms.Resize((224, 224)),
+            #     transforms.RandomAffine(degrees=10, translate=(0.1, 0.1)),
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ]),
         ]
 
         self.db_path = db_path
@@ -132,7 +135,7 @@ class PlayerReID:
         """
         all_features = []
         frames_to_process = [img_bgr]
-        
+        '''
         # Capture additional frames if possible
         if capture_multiple and cap is not None and model is not None:
             import time
@@ -143,15 +146,24 @@ class PlayerReID:
                 if ret:
                     # Detect person in this frame
                     results = model(frame, verbose=False)
+                    # Find largest person in this frame
+                    best_person_crop = None
+                    max_area = 0
+                    
                     for result in results:
                         for box in result.boxes:
                             if int(box.cls[0]) == 0:  # Person
                                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                                person_crop = frame[y1:y2, x1:x2]
-                                if person_crop.size > 0:
-                                    frames_to_process.append(person_crop)
-                                    break
-        
+                                area = (x2 - x1) * (y2 - y1)
+                                if area > max_area:
+                                    max_area = area
+                                    person_crop = frame[y1:y2, x1:x2]
+                                    if person_crop.size > 0:
+                                        best_person_crop = person_crop
+                    
+                    if best_person_crop is not None:
+                        frames_to_process.append(best_person_crop)
+        '''
         # Extract features from all frames with augmentation
         for frame in frames_to_process:
             features_list = self.extract_features(frame, use_augment=True)
@@ -181,7 +193,6 @@ class PlayerReID:
             return None, 0.0, {}
 
         target_features = self.extract_features(img_bgr)
-        target_norm = np.linalg.norm(target_features)
         
         scores_dict = {}  # For debug mode
         best_combined_score = -1.0
@@ -192,7 +203,7 @@ class PlayerReID:
             # Calculate similarity with all registered features for this player
             similarities = []
             for features in features_list:
-                score = np.dot(target_features, features) / (target_norm * np.linalg.norm(features))
+                score = np.dot(target_features, features) / (np.linalg.norm(target_features) * np.linalg.norm(features))
                 similarities.append(score)
             
             # Combined score: 70% max similarity + 30% mean similarity
