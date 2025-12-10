@@ -22,7 +22,7 @@ def main():
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x'],
                         help='YOLO model to use')
-    parser.add_argument('--backbone', type=str, default='resnet50',
+    parser.add_argument('--backbone', type=str, default='resnet101',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
                         help='Backbone model for player re-identification')
     parser.add_argument('--debug_mode', type=bool, default=False,
@@ -260,19 +260,25 @@ def main():
                     reg_persons = yolo.get_person_crops(reg_frame, reg_results)
                     
                     if reg_persons:
-                        # Sort by area (width * height) descending to get the largest person (closest/main subject)
-                        reg_persons.sort(key=lambda p: (p[1][2]-p[1][0]) * (p[1][3]-p[1][1]), reverse=True)
+
+                        # Find the person with the largest bounding box
+                        best_person_crop = None
+                        max_area = 0
                         
-                        # Use the first person found (now the largest)
-                        person_crop, _ = reg_persons[0]
+                        for person_img, (x1, y1, x2, y2) in reg_persons:
+                            area = (x2 - x1) * (y2 - y1)
+                            if area > max_area:
+                                max_area = area
+                                best_person_crop = person_img
                         
-                        sample_count = reid.register_player(
-                            player_name, 
-                            person_crop, 
-                            capture_multiple=True,
-                            cap=cap,
-                            model=yolo.model 
-                        )
+                        if best_person_crop is not None:
+                            sample_count = reid.register_player(
+                                player_name, 
+                                best_person_crop,
+                                capture_multiple=True,
+                                cap=cap,
+                                model=yolo.model 
+                            )
                         print(f"\nRegistration successful! Added {sample_count} samples.")
                         print("="*40 + "\n")
                     else:
