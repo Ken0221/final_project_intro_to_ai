@@ -124,30 +124,82 @@ def main():
         # Get persons using helper
         persons = yolo.get_person_crops(frame, results)
         
-        for person_img, (x1, y1, x2, y2) in persons:
-            name, score, scores_dict = reid.identify_player(person_img)
+        # 1. Collect all potential matches
+        # candidates = [(score, person_idx, player_name), ...]
+        candidates = []
+        person_data = [] # Stores (box, scores_dict) for rendering later
+        
+        ID_THRESHOLD = 0.55
+
+        for idx, (person_img, (x1, y1, x2, y2)) in enumerate(persons):
+            # We use identify_player mainly to populate scores_dict
+            # We ignore the returned 'best_match' decision because we do our own greedy assignment
+            _, _, scores_dict = reid.identify_player(person_img, threshold=ID_THRESHOLD)
+            person_data.append(((x1, y1, x2, y2), scores_dict))
             
-            display_name = name if name else "Unknown"
-            if name:
+            if scores_dict:
+                for p_name, p_vals in scores_dict.items():
+                    s = p_vals['combined']
+                    if s > ID_THRESHOLD:
+                        candidates.append((s, idx, p_name))
+        
+        # 2. Global Greedy Matching
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        
+        assigned_persons = set()
+        assigned_players = set()
+        final_assignments = {} # person_idx -> (name, score)
+
+        for score, p_idx, p_name in candidates:
+            # If this person is already assigned, or this player is already found
+            if p_idx in assigned_persons or p_name in assigned_players:
+                continue
+            
+            # Assign
+            final_assignments[p_idx] = (p_name, score)
+            assigned_persons.add(p_idx)
+            assigned_players.add(p_name)
+
+        # 3. Render Results
+        for idx, (box_coords, scores_dict) in enumerate(person_data):
+            x1, y1, x2, y2 = box_coords
+            
+            if idx in final_assignments:
+                name, score = final_assignments[idx]
+                display_name = name
+                color = (255, 0, 255) # Magenta for identified
+                
+                # Update "Current Player" display if it's the highest score so far in loop?? 
+                # Actually usually we just want to know who is 'active'. 
+                # For now let's just pick the last one or the one with highest score overall?
+                # Let's keep the logic simple: update 'current_player' if this is a valid match
+                # (This might toggle if multiple players are in frame, but standard behavior)
                 current_player = name
                 player_score = score
+            else:
+                display_name = "Unknown"
+                score = 0.0
+                color = (0, 0, 255) # Red for unknown
 
-            # Draw name and box (Always draw)
-            cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+            # Draw name and box
+            if display_name == "Unknown":
+                 cv2.putText(frame, f"Player: {display_name}", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            else:
+                cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+            
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             
             # Debug mode: show all scores on frame
             if debug_mode and scores_dict:
                 y_offset = y1 + 20
                 for p_name, p_scores in scores_dict.items():
-                    debug_text = f"{p_name}: {p_scores['combined']:.2f} (max:{p_scores['max']:.2f}, mean:{p_scores['mean']:.2f})"
+                    debug_text = f"{p_name}: {p_scores['combined']:.2f}"
                     cv2.putText(frame, debug_text, (x1, y_offset), 
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
                     y_offset += 18
-                
-            # Debug: Show what the Re-ID model sees
-            # cv2.imshow('Debug: Player Crop', person_img)
 
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
@@ -208,7 +260,10 @@ def main():
                     reg_persons = yolo.get_person_crops(reg_frame, reg_results)
                     
                     if reg_persons:
-                        # Use the first person found
+                        # Sort by area (width * height) descending to get the largest person (closest/main subject)
+                        reg_persons.sort(key=lambda p: (p[1][2]-p[1][0]) * (p[1][3]-p[1][1]), reverse=True)
+                        
+                        # Use the first person found (now the largest)
                         person_crop, _ = reg_persons[0]
                         
                         sample_count = reid.register_player(
