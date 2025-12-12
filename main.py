@@ -76,7 +76,8 @@ def main():
     print("Starting Bowling Scoring System...")
     print("="*50)
     print("\nKeys:")
-    print("  'r': Register new player (can register same player multiple times)")
+    print("  'r': Capture a registration sample (same player, different angles)")
+    print("  's': Save captured samples and name player")
     print("  'd': Toggle Debug mode (show all similarity scores)")
     print("  'l': List all registered players")
     print("  'c': Delete (Clear) a player")
@@ -91,6 +92,9 @@ def main():
         cv2.waitKey(100)
 
     prev_time = 0
+
+    # Buffer for multi-angle registration before naming
+    pending_reg_crops = []
 
     while True:
         ret, frame = cap.read()
@@ -188,42 +192,56 @@ def main():
         if key == ord('q'):
             break
         elif key == ord('r'):
-            # Registration Mode
+            # Capture a registration sample (multi-angle before naming)
             print("\n" + "="*40)
-            print("PLAYER REGISTRATION")
+            print("CAPTURE REGISTRATION SAMPLE")
             print("="*40)
-            print("Enter player name in terminal:")
-            print("(Enter existing name to add more samples)")
-            player_name = input("Player Name: ").strip()
-            if player_name:
-                print(f"\nPlease stand in front of the camera for {player_name}...")
-                print("Capturing multiple frames for better accuracy...")
-                time.sleep(2)  # Give time to pose
-                
-                # Capture a fresh frame
-                ret, reg_frame = cap.read()
-                if ret:
-                    # Detect person in this frame to crop
-                    reg_results = yolo.detect(reg_frame)
-                    reg_persons = yolo.get_person_crops(reg_frame, reg_results)
-                    
-                    if reg_persons:
-                        # Use the first person found
-                        person_crop, _ = reg_persons[0]
-                        
-                        sample_count = reid.register_player(
-                            player_name, 
-                            person_crop, 
-                            capture_multiple=True,
-                            cap=cap,
-                            model=yolo.model 
-                        )
-                        print(f"\nRegistration successful! Added {sample_count} samples.")
-                        print("="*40 + "\n")
-                    else:
-                        print("No person detected for registration. Try again.")
+            print("Stand in front of the camera at a new angle.")
+            time.sleep(1)  # Give time to pose
+
+            ret, reg_frame = cap.read()
+            if ret:
+                reg_results = yolo.detect(reg_frame)
+                reg_persons = yolo.get_person_crops(reg_frame, reg_results)
+
+                if reg_persons:
+                    # Pick the largest person crop
+                    best_crop = None
+                    best_area = 0
+                    for crop, (x1, y1, x2, y2) in reg_persons:
+                        area = max(0, x2 - x1) * max(0, y2 - y1)
+                        if area > best_area:
+                            best_area = area
+                            best_crop = crop
+
+                    if best_crop is not None:
+                        pending_reg_crops.append(best_crop)
+                        print(f"Captured sample #{len(pending_reg_crops)}.")
+                        print("Press 'r' again for more angles, or press 's' to save and name player.")
                 else:
-                    print("Failed to capture registration frame.")
+                    print("No person detected for registration. Try again.")
+            else:
+                print("Failed to capture registration frame.")
+            print("="*40 + "\n")
+
+        elif key == ord('s'):
+            # Finalize registration: name once, save all captured crops
+            if not pending_reg_crops:
+                print("\nNo pending samples. Press 'r' to capture first.\n")
+            else:
+                print("\n" + "="*40)
+                print("FINALIZE PLAYER REGISTRATION")
+                print("="*40)
+                print(f"Captured {len(pending_reg_crops)} angles.")
+                print("Enter player name in terminal:")
+                player_name = input("Player Name: ").strip()
+                if player_name:
+                    sample_count = reid.register_player_from_samples(player_name, pending_reg_crops)
+                    print(f"\nRegistration successful! Added {sample_count} samples.")
+                    pending_reg_crops.clear()
+                else:
+                    print("Cancelled. Samples kept; press 's' again to save.")
+                print("="*40 + "\n")
         
         elif key == ord('d'):
             # Toggle debug mode
