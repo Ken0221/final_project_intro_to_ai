@@ -97,6 +97,7 @@ Main workflow (in `main.py`):
 
 1. Press `r` to **capture one registration sample** for the *same player*.
    - YOLO detects persons; the largest person crop is buffered.
+   - While collecting samples (after the first `r` and before `s`), all detected persons are displayed as `Unknown` to avoid confusing the on-screen IDs.
 2. Change to a new angle/pose and press `r` again.
 3. Repeat until you have **2–3 angles** (or more).
 4. Press `s` to **finalize registration**.

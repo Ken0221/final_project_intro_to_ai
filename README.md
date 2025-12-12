@@ -92,6 +92,7 @@ python main.py --source path/to/video.mp4
 
 1. Press `r` to capture a registration sample for a player
 2. Change angle/pose and press `r` again (repeat 2–3 times)
+   - While you are collecting samples (after the first `r` and before `s`), all detected persons are displayed as **Unknown**
 3. Press `s` to finalize registration
 4. Enter the player's name once in the terminal
 5. The system will:
