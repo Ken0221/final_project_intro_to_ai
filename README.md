@@ -81,7 +81,8 @@ python main.py --source path/to/video.mp4
 
 | Key | Function |
 |-----|----------|
-| `r` | **Register Player** - Enter player name and capture reference images (can register same player multiple times) |
+| `r` | **Capture Registration Sample** - Capture one angle/pose for the same player (press multiple times) |
+| `s` | **Save Registration** - After capturing 2–3 angles with `r`, enter player name once and save all samples |
 | `d` | **Debug Mode** - Toggle display of all similarity scores for each detected person |
 | `l` | **List Players** - Show all registered players and their sample counts |
 | `c` | **Clear/Delete Player** - Remove a registered player from the database |
@@ -89,14 +90,15 @@ python main.py --source path/to/video.mp4
 
 ### Registration Workflow
 
-1. Press `r` to enter registration mode
-2. Enter the player's name in the terminal
-3. Stand in front of the camera
-4. The system will automatically:
-   - Capture 3 frames
-   - Generate 5 augmented features per frame (original + 4 augmentations)
-   - Store up to 15 samples total
-5. You can register the same player multiple times to add more samples
+1. Press `r` to capture a registration sample for a player
+2. Change angle/pose and press `r` again (repeat 2–3 times)
+   - While you are collecting samples (after the first `r` and before `s`), all detected persons are displayed as **Unknown**
+3. Press `s` to finalize registration
+4. Enter the player's name once in the terminal
+5. The system will:
+   - Use all captured angles
+   - Generate 5 augmented features per angle (original + 4 augmentations)
+   - Store a multi-sample prototype per player
 
 ## Project Structure
 

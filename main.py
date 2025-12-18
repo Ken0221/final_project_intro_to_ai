@@ -22,7 +22,7 @@ def main():
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x'],
                         help='YOLO model to use')
-    parser.add_argument('--backbone', type=str, default='resnet50',
+    parser.add_argument('--backbone', type=str, default='resnet101',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
                         help='Backbone model for player re-identification')
     parser.add_argument('--debug_mode', type=bool, default=False,
@@ -76,7 +76,8 @@ def main():
     print("Starting Bowling Scoring System...")
     print("="*50)
     print("\nKeys:")
-    print("  'r': Register new player (can register same player multiple times)")
+    print("  'r': Capture a registration sample (same player, different angles)")
+    print("  's': Save captured samples and name player")
     print("  'd': Toggle Debug mode (show all similarity scores)")
     print("  'l': List all registered players")
     print("  'c': Delete (Clear) a player")
@@ -91,6 +92,9 @@ def main():
         cv2.waitKey(100)
 
     prev_time = 0
+
+    # Buffer for multi-angle registration before naming
+    pending_reg_crops = []
 
     while True:
         ret, frame = cap.read()
@@ -123,31 +127,90 @@ def main():
         
         # Get persons using helper
         persons = yolo.get_person_crops(frame, results)
-        
-        for person_img, (x1, y1, x2, y2) in persons:
-            name, score, scores_dict = reid.identify_player(person_img)
-            
-            display_name = name if name else "Unknown"
-            if name:
-                current_player = name
-                player_score = score
 
-            # Draw name and box (Always draw)
-            cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 2)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+        # If we're collecting registration samples (pressed 'r' before saving with 's'),
+        # force all detected persons to be displayed as Unknown.
+        registration_active = len(pending_reg_crops) > 0
+
+        if registration_active:
+            for person_img, (x1, y1, x2, y2) in persons:
+                cv2.putText(frame, "Player: Unknown", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        else:
+        
+            # 1. Collect all potential matches
+            # candidates = [(score, person_idx, player_name), ...]
+            candidates = []
+            person_data = [] # Stores (box, scores_dict) for rendering later
             
-            # Debug mode: show all scores on frame
-            if debug_mode and scores_dict:
-                y_offset = y1 + 20
-                for p_name, p_scores in scores_dict.items():
-                    debug_text = f"{p_name}: {p_scores['combined']:.2f} (max:{p_scores['max']:.2f}, mean:{p_scores['mean']:.2f})"
-                    cv2.putText(frame, debug_text, (x1, y_offset), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                    y_offset += 18
+            ID_THRESHOLD = 0.55
+
+            for idx, (person_img, (x1, y1, x2, y2)) in enumerate(persons):
+                # We use identify_player mainly to populate scores_dict
+                # We ignore the returned 'best_match' decision because we do our own greedy assignment
+                _, _, scores_dict = reid.identify_player(person_img, threshold=ID_THRESHOLD)
+                person_data.append(((x1, y1, x2, y2), scores_dict))
                 
-            # Debug: Show what the Re-ID model sees
-            # cv2.imshow('Debug: Player Crop', person_img)
+                if scores_dict:
+                    for p_name, p_vals in scores_dict.items():
+                        s = p_vals['combined']
+                        if s > ID_THRESHOLD:
+                            candidates.append((s, idx, p_name))
+            
+            # 2. Global Greedy Matching
+            # Sort by score descending
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            
+            assigned_persons = set()
+            assigned_players = set()
+            final_assignments = {} # person_idx -> (name, score)
+
+            for score, p_idx, p_name in candidates:
+                # If this person is already assigned, or this player is already found
+                if p_idx in assigned_persons or p_name in assigned_players:
+                    continue
+                
+                # Assign
+                final_assignments[p_idx] = (p_name, score)
+                assigned_persons.add(p_idx)
+                assigned_players.add(p_name)
+
+            # 3. Render Results
+            for idx, (box_coords, scores_dict) in enumerate(person_data):
+                x1, y1, x2, y2 = box_coords
+                
+                if idx in final_assignments:
+                    name, score = final_assignments[idx]
+                    display_name = name
+                    color = (255, 0, 255) # Magenta for identified
+                    
+                    # Update "Current Player" display
+                    current_player = name
+                    player_score = score
+                else:
+                    display_name = "Unknown"
+                    score = 0.0
+                    color = (0, 0, 255) # Red for unknown
+
+                # Draw name and box
+                if display_name == "Unknown":
+                     cv2.putText(frame, f"Player: {display_name}", (x1, y1 - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                else:
+                    cv2.putText(frame, f"Player: {display_name} ({score:.2f})", (x1, y1 - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+                
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                
+                # Debug mode: show all scores on frame
+                if debug_mode and scores_dict:
+                    y_offset = y1 + 20
+                    for p_name, p_scores in scores_dict.items():
+                        debug_text = f"{p_name}: {p_scores['combined']:.2f}"
+                        cv2.putText(frame, debug_text, (x1, y_offset), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                        y_offset += 18
 
         # Display Current Player at top
         cv2.putText(frame, f"Current Player: {current_player}", (20, 100), 
@@ -188,42 +251,56 @@ def main():
         if key == ord('q'):
             break
         elif key == ord('r'):
-            # Registration Mode
+            # Capture a registration sample (multi-angle before naming)
             print("\n" + "="*40)
-            print("PLAYER REGISTRATION")
+            print("CAPTURE REGISTRATION SAMPLE")
             print("="*40)
-            print("Enter player name in terminal:")
-            print("(Enter existing name to add more samples)")
-            player_name = input("Player Name: ").strip()
-            if player_name:
-                print(f"\nPlease stand in front of the camera for {player_name}...")
-                print("Capturing multiple frames for better accuracy...")
-                time.sleep(2)  # Give time to pose
-                
-                # Capture a fresh frame
-                ret, reg_frame = cap.read()
-                if ret:
-                    # Detect person in this frame to crop
-                    reg_results = yolo.detect(reg_frame)
-                    reg_persons = yolo.get_person_crops(reg_frame, reg_results)
-                    
-                    if reg_persons:
-                        # Use the first person found
-                        person_crop, _ = reg_persons[0]
-                        
-                        sample_count = reid.register_player(
-                            player_name, 
-                            person_crop, 
-                            capture_multiple=True,
-                            cap=cap,
-                            model=yolo.model 
-                        )
-                        print(f"\nRegistration successful! Added {sample_count} samples.")
-                        print("="*40 + "\n")
-                    else:
-                        print("No person detected for registration. Try again.")
+            print("Stand in front of the camera at a new angle.")
+            time.sleep(1)  # Give time to pose
+
+            ret, reg_frame = cap.read()
+            if ret:
+                reg_results = yolo.detect(reg_frame)
+                reg_persons = yolo.get_person_crops(reg_frame, reg_results)
+
+                if reg_persons:
+                    # Pick the largest person crop
+                    best_crop = None
+                    best_area = 0
+                    for crop, (x1, y1, x2, y2) in reg_persons:
+                        area = max(0, x2 - x1) * max(0, y2 - y1)
+                        if area > best_area:
+                            best_area = area
+                            best_crop = crop
+
+                    if best_crop is not None:
+                        pending_reg_crops.append(best_crop)
+                        print(f"Captured sample #{len(pending_reg_crops)}.")
+                        print("Press 'r' again for more angles, or press 's' to save and name player.")
                 else:
-                    print("Failed to capture registration frame.")
+                    print("No person detected for registration. Try again.")
+            else:
+                print("Failed to capture registration frame.")
+            print("="*40 + "\n")
+
+        elif key == ord('s'):
+            # Finalize registration: name once, save all captured crops
+            if not pending_reg_crops:
+                print("\nNo pending samples. Press 'r' to capture first.\n")
+            else:
+                print("\n" + "="*40)
+                print("FINALIZE PLAYER REGISTRATION")
+                print("="*40)
+                print(f"Captured {len(pending_reg_crops)} angles.")
+                print("Enter player name in terminal:")
+                player_name = input("Player Name: ").strip()
+                if player_name:
+                    sample_count = reid.register_player_from_samples(player_name, pending_reg_crops)
+                    print(f"\nRegistration successful! Added {sample_count} samples.")
+                    pending_reg_crops.clear()
+                else:
+                    print("Cancelled. Samples kept; press 's' again to save.")
+                print("="*40 + "\n")
         
         elif key == ord('d'):
             # Toggle debug mode
