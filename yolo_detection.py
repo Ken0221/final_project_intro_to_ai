@@ -22,6 +22,7 @@ class YOLODetector:
         self.CLASS_BOTTLE = 39
 
     def detect(self, frame, verbose=False):
+        
         """
         Run inference on a frame.
         """
