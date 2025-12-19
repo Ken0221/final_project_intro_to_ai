@@ -44,6 +44,10 @@ Run the main script to start the system:
 python main.py --source 0
 ```
 
+```bash
+python track_test.py --source 1 --model yolo11n --com /dev/cu.usbmodem1201 --target person
+```
+
 - Replace `0` with your camera index or a video file path if needed.
 - The YOLOv8 nano model (`yolov8n.pt`) will be downloaded automatically on the first run.
 
@@ -75,6 +79,10 @@ python main.py --source ivcam    # Camera 2
 
 # Use video file
 python main.py --source path/to/video.mp4
+
+# Arduino com
+python main.py --com COM4
+python main.py --com /dev/cu.usbmodem1201
 ```
 
 ### Keyboard Controls
