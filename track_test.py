@@ -22,6 +22,7 @@ from arduino_control import CameraTracker
 from yolo_detection import YOLODetector
 
 
+
 def main():
     # Camera Presets
     CAMERA_PRESETS = {
@@ -75,6 +76,7 @@ def main():
     print(f"Opening camera source: {source}")
     cap = cv2.VideoCapture(source)
     
+    
     # Set camera resolution
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -111,103 +113,108 @@ def main():
     prev_time = 0
     target_label = args.target
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Could not read frame. Retrying...")
-            continue
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Could not read frame. Retrying...")
+                continue
 
-        # FPS Calculation
-        curr_time = time.time()
-        fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
-        prev_time = curr_time
+            # FPS Calculation
+            curr_time = time.time()
+            fps = 1 / (curr_time - prev_time) if prev_time != 0 else 0
+            prev_time = curr_time
 
-        # Track the target object
-        result = tracker.camera_track(frame, target_label)
+            # Track the target object
+            result = tracker.camera_track(frame, target_label)
 
-        # Draw frame center crosshair
-        cx_frame = tracker.frame_center_x
-        cy_frame = tracker.frame_center_y
-        cv2.drawMarker(frame, (cx_frame, cy_frame), (255, 255, 255), 
-                       cv2.MARKER_CROSS, 20, 2)
+            # Draw frame center crosshair
+            cx_frame = tracker.frame_center_x
+            cy_frame = tracker.frame_center_y
+            cv2.drawMarker(frame, (cx_frame, cy_frame), (255, 255, 255), 
+                           cv2.MARKER_CROSS, 20, 2)
 
-        # Draw dead zone rectangle
-        dz_x = tracker.dead_zone_x
-        dz_y = tracker.dead_zone_y
-        cv2.rectangle(frame, 
-                      (cx_frame - dz_x, cy_frame - dz_y),
-                      (cx_frame + dz_x, cy_frame + dz_y),
-                      (100, 100, 100), 1)
+            # Draw dead zone rectangle
+            dz_x = tracker.dead_zone_x
+            dz_y = tracker.dead_zone_y
+            cv2.rectangle(frame, 
+                          (cx_frame - dz_x, cy_frame - dz_y),
+                          (cx_frame + dz_x, cy_frame + dz_y),
+                          (100, 100, 100), 1)
 
-        if result['found']:
-            # Draw bounding box
-            x1, y1, x2, y2 = result['box']
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            if result['found']:
+                # Draw bounding box
+                x1, y1, x2, y2 = result['box']
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Draw object center
+                cx, cy = result['center']
+                cv2.circle(frame, (cx, cy), 8, (0, 0, 255), -1)
+                
+                # Draw line from frame center to object
+                cv2.line(frame, (cx_frame, cy_frame), (cx, cy), (255, 255, 0), 2)
+                
+                # Label
+                cv2.putText(frame, f"{target_label}", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Tracking info
+                error_x, error_y = result['error']
+                info_lines = [
+                    f"Target: {target_label} FOUND",
+                    f"Center: ({cx}, {cy})",
+                    f"Error: ({error_x}, {error_y})",
+                    f"Pan Speed: {result['pan_speed']} (90=stop)",
+                    f"Tilt Angle: {result['tilt_angle']}°"
+                ]
+            else:
+                info_lines = [
+                    f"Target: {target_label} NOT FOUND",
+                    f"Pan Speed: 90 (stopped)",
+                    f"Tilt Angle: {tracker.current_tilt_angle}°"
+                ]
+
+            # Display info
+            y_offset = 30
+            cv2.putText(frame, f"FPS: {int(fps)}", (20, y_offset),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            y_offset += 30
             
-            # Draw object center
-            cx, cy = result['center']
-            cv2.circle(frame, (cx, cy), 8, (0, 0, 255), -1)
-            
-            # Draw line from frame center to object
-            cv2.line(frame, (cx_frame, cy_frame), (cx, cy), (255, 255, 0), 2)
-            
-            # Label
-            cv2.putText(frame, f"{target_label}", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            
-            # Tracking info
-            error_x, error_y = result['error']
-            info_lines = [
-                f"Target: {target_label} FOUND",
-                f"Center: ({cx}, {cy})",
-                f"Error: ({error_x}, {error_y})",
-                f"Pan Speed: {result['pan_speed']} (90=stop)",
-                f"Tilt Angle: {result['tilt_angle']}°"
-            ]
-        else:
-            info_lines = [
-                f"Target: {target_label} NOT FOUND",
-                f"Pan Speed: 90 (stopped)",
-                f"Tilt Angle: {tracker.current_tilt_angle}°"
-            ]
+            for line in info_lines:
+                color = (0, 255, 0) if result['found'] else (0, 0, 255)
+                cv2.putText(frame, line, (20, y_offset),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                y_offset += 25
 
-        # Display info
-        y_offset = 30
-        cv2.putText(frame, f"FPS: {int(fps)}", (20, y_offset),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        y_offset += 30
-        
-        for line in info_lines:
-            color = (0, 255, 0) if result['found'] else (0, 0, 255)
-            cv2.putText(frame, line, (20, y_offset),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-            y_offset += 25
+            # Connection status
+            status = "CONNECTED" if tracker.connected else "DISCONNECTED"
+            status_color = (0, 255, 0) if tracker.connected else (0, 0, 255)
+            cv2.putText(frame, f"Arduino: {status}", (20, frame.shape[0] - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
 
-        # Connection status
-        status = "CONNECTED" if tracker.connected else "DISCONNECTED"
-        status_color = (0, 255, 0) if tracker.connected else (0, 0, 255)
-        cv2.putText(frame, f"Arduino: {status}", (20, frame.shape[0] - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+            # Show frame
+            cv2.imshow('Tennis Ball Tracking', frame)
 
-        # Show frame
-        cv2.imshow('Tennis Ball Tracking', frame)
+            # Handle key presses
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                break
+            elif key == ord('c'):
+                print("Connecting to Arduino...")
+                tracker.connect()
+            elif key == ord('d'):
+                print("Disconnecting from Arduino...")
+                tracker.disconnect()
 
-        # Handle key presses
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            break
-        elif key == ord('c'):
-            print("Connecting to Arduino...")
-            tracker.connect()
-        elif key == ord('d'):
-            print("Disconnecting from Arduino...")
-            tracker.disconnect()
-
-    # Cleanup
-    tracker.disconnect()
-    cap.release()
-    cv2.destroyAllWindows()
-    print("Tracking test ended.")
+    except KeyboardInterrupt:
+        print("\nCtrl+C detected! Stopping motors...")
+    
+    finally:
+        # Cleanup - always runs whether normal exit, 'q' press, or Ctrl+C
+        tracker.disconnect()
+        cap.release()
+        cv2.destroyAllWindows()
+        print("Tracking test ended.")
 
 
 if __name__ == "__main__":
