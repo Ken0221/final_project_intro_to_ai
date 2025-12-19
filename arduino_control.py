@@ -49,14 +49,16 @@ class CameraTracker:
         # State management for tilt servo (absolute position)
         self.current_tilt_angle = 90  # Start at center position (0-180)
         
-        # Dead zone settings (in pixels) - motor stops when within this range
-        self.dead_zone_x = 30  # Horizontal dead zone
-        self.dead_zone_y = 20  # Vertical dead zone
+        # Dead zone settings (as proportion of frame size) - motor stops when within this range
+        self.dead_zone_ratio_x = 0.05  # 5% of frame width
+        self.dead_zone_ratio_y = 0.05  # 5% of frame height
+        self.dead_zone_x = int(frame_width * self.dead_zone_ratio_x)
+        self.dead_zone_y = int(frame_height * self.dead_zone_ratio_y)
         
         # Speed/angle adjustment settings
-        self.pan_speed_factor = 0.3   # How much error affects pan speed
-        self.tilt_step = 2            # Degrees to move per frame for tilt
-        self.max_pan_deviation = 60   # Max deviation from 90 (stop) for pan speed
+        self.pan_speed_factor = 0.2   # How much error affects pan speed
+        self.tilt_step = 1            # Degrees to move per frame for tilt
+        self.max_pan_deviation = 80   # Max deviation from 90 (stop) for pan speed
         
         # Tilt limits
         self.tilt_min = 30   # Minimum tilt angle (looking up)
@@ -229,7 +231,7 @@ class CameraTracker:
         # Calculate final speed (centered at 90)
         # Positive error (object left) -> speed > 90 (rotate left to track)
         # Negative error (object right) -> speed < 90 (rotate right to track)
-        pan_speed = 90 + speed_deviation * 0.5
+        pan_speed = 90 + speed_deviation
         
         return int(pan_speed)
     
@@ -255,9 +257,9 @@ class CameraTracker:
         # Positive error (object above) -> decrease angle (tilt up)
         # Negative error (object below) -> increase angle (tilt down)
         if error_y > 0:
-            new_angle = self.current_tilt_angle - self.tilt_step * 0.5
+            new_angle = self.current_tilt_angle - self.tilt_step
         else:
-            new_angle = self.current_tilt_angle + self.tilt_step * 0.5
+            new_angle = self.current_tilt_angle + self.tilt_step
         
         # Constrain to limits
         new_angle = max(self.tilt_min, min(self.tilt_max, new_angle))
@@ -345,6 +347,9 @@ class CameraTracker:
         self.frame_height = height
         self.frame_center_x = width // 2
         self.frame_center_y = height // 2
+        # Recalculate dead zones based on new frame size
+        self.dead_zone_x = int(width * self.dead_zone_ratio_x)
+        self.dead_zone_y = int(height * self.dead_zone_ratio_y)
 
 
 # Global tracker instance for simple function-based usage
