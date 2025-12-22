@@ -45,6 +45,11 @@ curl -L "https://universe.roboflow.com/ds/N4Y7qdOvNp?key=iTf4N8oQWT" > plastic_b
 curl -L "https://universe.roboflow.com/ds/CMg9AG5skG?key=2PTgYv0CPu" > tennis_balls.zip; unzip tennis_balls.zip; rm tennis_balls.zip
 ```
 
+* people
+```
+curl -L "https://universe.roboflow.com/ds/llZnTpCt31?key=UJNRryLDFk" > people.zip; unzip people.zip; rm people.zip
+```
+
 ## Usage
 
 ### Basic Usage

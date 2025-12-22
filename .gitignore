@@ -30,6 +30,7 @@ player_db/
 dataset.zip
 tennis_dataset
 bottle_dataset
+human_dataset
 
 # training results
 runs/
