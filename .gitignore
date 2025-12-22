@@ -30,13 +30,15 @@ player_db/
 *.zip
 dataset.zip
 
-# Extracted datasets
+# Extracted datasets (individual datasets, not the merged one)
 tennis_dataset/
 plastic_bottles/
 people/
-merged_dataset/
 bottle_dataset/
 human_dataset/
+
+# Keep merged_dataset for Git LFS
+# merged_dataset/ is tracked by Git LFS (see .gitattributes)
 
 # Dataset metadata files
 README.dataset.txt

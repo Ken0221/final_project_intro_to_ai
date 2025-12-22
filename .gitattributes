@@ -1,0 +1,4 @@
+merged_dataset/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+merged_dataset/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+merged_dataset/**/*.png filter=lfs diff=lfs merge=lfs -text
+merged_dataset/**/*.txt filter=lfs diff=lfs merge=lfs -text
