@@ -13,7 +13,11 @@ def evaluate_custom_model():
     model = YOLO("yolov11n.pt")
 
     # 3. Evaluation
-    model.val(data=dataset_yaml_path, imgsz=640, device=0)
+    model.val(
+        data=dataset_yaml_path,
+        imgsz=640,
+        device=0
+    )
 
 if __name__ == "__main__":
     evaluate_custom_model()
