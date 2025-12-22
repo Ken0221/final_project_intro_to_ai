@@ -39,7 +39,7 @@ def main():
                         help=f'Camera source: index or preset ({", ".join(CAMERA_PRESETS.keys())})')
     parser.add_argument('--model', type=str, default='yolov8n',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
-                                 'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x'],
+                                 'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x', 'best'],
                         help='YOLO model to use')
     parser.add_argument('--com', type=str, default='COM4',
                         help='Arduino COM port')

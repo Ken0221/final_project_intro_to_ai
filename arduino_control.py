@@ -56,13 +56,13 @@ class CameraTracker:
         self.dead_zone_y = int(frame_height * self.dead_zone_ratio_y)
         
         # Speed/angle adjustment settings
-        self.pan_speed_factor = 0.2   # How much error affects pan speed
-        self.tilt_step = 1            # Degrees to move per frame for tilt
+        self.pan_speed_factor = 0.12   # How much error affects pan speed
+        self.tilt_step = 1          # Degrees to move per frame for tilt
         self.max_pan_deviation = 80   # Max deviation from 90 (stop) for pan speed
         
         # Tilt limits
         self.tilt_min = 30   # Minimum tilt angle (looking up)
-        self.tilt_max = 150  # Maximum tilt angle (looking down)
+        self.tilt_max = 115  # Maximum tilt angle (looking down)
         
         # Serial connection
         self.arduino = None
@@ -70,7 +70,7 @@ class CameraTracker:
         
         # Rate limiting - don't send commands too fast
         self.last_command_time = 0
-        self.min_command_interval = 0.05  # 50ms between commands (20 Hz max)
+        self.min_command_interval = 0.033  # 33ms between commands (30 Hz max)
         
         # Last sent values - avoid sending same command repeatedly
         self.last_pan_speed = 90
@@ -263,7 +263,8 @@ class CameraTracker:
         
         # Constrain to limits
         new_angle = max(self.tilt_min, min(self.tilt_max, new_angle))
-        
+        # debug
+        # print(f"New Tilt Angle: {new_angle}")
         return int(new_angle)
     
     def camera_track(self, frame, target_label):
