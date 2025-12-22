@@ -26,11 +26,26 @@ player_db/
 # Uncomment if you want to ignore model weights
 # *.pt 
 
-# Dataset
+# Dataset ZIP files
+*.zip
 dataset.zip
-tennis_dataset
-bottle_dataset
-human_dataset
 
-# training results
+# Extracted datasets
+tennis_dataset/
+plastic_bottles/
+people/
+merged_dataset/
+bottle_dataset/
+human_dataset/
+
+# Dataset metadata files
+README.dataset.txt
+README.roboflow.txt
+
+# Training results
 runs/
+
+# Large model weights (optional - comment out if you want to commit them)
+*.pt
+!yolo11n.pt
+!best.pt
