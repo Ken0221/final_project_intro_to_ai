@@ -50,18 +50,18 @@ class CameraTracker:
         self.current_tilt_angle = 90  # Start at center position (0-180)
         
         # Dead zone settings (as proportion of frame size) - motor stops when within this range
-        self.dead_zone_ratio_x = 0.05  # 5% of frame width
-        self.dead_zone_ratio_y = 0.05  # 5% of frame height
+        self.dead_zone_ratio_x = 0.04  # 4% of frame width
+        self.dead_zone_ratio_y = 0.07  # 7% of frame height
         self.dead_zone_x = int(frame_width * self.dead_zone_ratio_x)
         self.dead_zone_y = int(frame_height * self.dead_zone_ratio_y)
         
         # Speed/angle adjustment settings
         self.pan_speed_factor = 0.12   # How much error affects pan speed
-        self.tilt_step = 1          # Degrees to move per frame for tilt
-        self.max_pan_deviation = 80   # Max deviation from 90 (stop) for pan speed
+        self.tilt_step = 1        # Degrees to move per frame for tilt
+        self.max_pan_deviation = 70   # Max deviation from 90 (stop) for pan speed
         
         # Tilt limits
-        self.tilt_min = 30   # Minimum tilt angle (looking up)
+        self.tilt_min = 0   # Minimum tilt angle (looking up)
         self.tilt_max = 115  # Maximum tilt angle (looking down)
         
         # Serial connection

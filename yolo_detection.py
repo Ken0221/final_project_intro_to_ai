@@ -21,6 +21,10 @@ class YOLODetector:
         self.CLASS_PERSON = 0
         self.CLASS_BOTTLE = 39
 
+        # Tennis ball mapping - treat these COCO classes as tennis_ball
+        # sports ball (32), frisbee (29), baseball glove (35), apple (47), orange (49)
+        self.TENNIS_BALL_CLASSES = {32, 29, 35, 47, 49}
+
     def detect(self, frame, verbose=False):
         
         """
@@ -67,6 +71,11 @@ class YOLODetector:
         attrs = []
         for result in results:
             for box in result.boxes:
-                cls_name = self.model.names[int(box.cls[0])]
+                cls_id = int(box.cls[0])
+                # Map certain classes to tennis_ball
+                if cls_id in self.TENNIS_BALL_CLASSES:
+                    cls_name = "tennis_ball"
+                else:
+                    cls_name = self.model.names[cls_id]
                 attrs.append((cls_name, box.xyxy[0]))
         return attrs

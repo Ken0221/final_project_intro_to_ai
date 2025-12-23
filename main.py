@@ -18,9 +18,9 @@ def main():
     parser = argparse.ArgumentParser(description='Bowling Scoring System')
     parser.add_argument('--source', type=str, default='default', 
                         help=f'Camera source index (0, 1...) or preset name ({", ".join(CAMERA_PRESETS.keys())}) or video file path')
-    parser.add_argument('--model', type=str, default='yolov8n',
+    parser.add_argument('--model', type=str, default='yolo11m',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
-                                 'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x'],
+                                 'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x', 'yolo12l','balanced_80_1epoch_11n'],
                         help='YOLO model to use')
     parser.add_argument('--backbone', type=str, default='resnet101',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
@@ -221,7 +221,6 @@ def main():
             cv2.putText(frame, "[DEBUG MODE]", (20, 140), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        standing_count = 0
         
         # ---------------------------
         # Bottle Detection Logic
@@ -239,7 +238,7 @@ def main():
         # Future work: How to determine if a bottle is standing or fallen?
 
         # Display the total count
-        cv2.putText(frame, f"Standing Bottles: {standing_count}", (20, 50), 
+        cv2.putText(frame, f"Bottles: {len(bottles)}", (20, 50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
 
         # Show the frame
