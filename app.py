@@ -46,7 +46,11 @@ class AppState:
         self.cap: cv2.VideoCapture = None
         
         self.camera_source = 0
-        self.com_port = "/dev/cu.usbmodem1201"
+        self.com_port = "/dev/cu.usbmodem11201"
+        
+        # Model settings
+        self.yolo_model = "yolo11s"
+        self.reid_backbone = "resnet50"
         
         self.running = False
         self.video_thread = None
@@ -99,22 +103,27 @@ def handle_settings(data):
     app_state.com_port = data.get('com_port', '/dev/cu.usbmodem1201')
     app_state.camera_source = data.get('camera_source', '0')
     num_frames = data.get('num_frames', 10)
+    num_bottles = data.get('num_bottles', 10)
+    
+    # Model settings
+    app_state.yolo_model = data.get('yolo_model', 'yolo11m')
+    app_state.reid_backbone = data.get('reid_backbone', 'resnet50')
     
     # Convert camera source
     if app_state.camera_source.isdigit():
         app_state.camera_source = int(app_state.camera_source)
     
-    app_state.game_manager.set_settings(app_state.com_port, num_frames)
+    app_state.game_manager.set_settings(app_state.com_port, num_frames, num_bottles)
     app_state.game_manager.state = GameState.REGISTRATION
     
-    # Initialize components
-    initialize_components()
+    # Initialize components with new settings
+    initialize_components(force_reload=True)
     
     # Start video processing thread
     start_video_thread()
     
     emit('game_state', app_state.game_manager.get_game_state_dict())
-    print(f"Settings updated: COM={app_state.com_port}, Camera={app_state.camera_source}, Frames={num_frames}")
+    print(f"Settings: COM={app_state.com_port}, Bottles={num_bottles}, YOLO={app_state.yolo_model}")
 
 @socketio.on('register_player')
 def handle_register_player(data):
@@ -223,19 +232,19 @@ def handle_disconnect_arduino():
 # Video Processing
 # ==========================================
 
-def initialize_components():
+def initialize_components(force_reload=False):
     """Initialize YOLO, ReID, Tracker, and Camera"""
     print("Initializing components...")
     
-    # Initialize YOLO
-    if app_state.yolo is None:
-        print("Loading YOLO model...")
-        app_state.yolo = YOLODetector(model_path="yolo11m.pt")
+    # Initialize YOLO (reload if model changed)
+    if app_state.yolo is None or force_reload:
+        print(f"Loading YOLO model: {app_state.yolo_model}.pt")
+        app_state.yolo = YOLODetector(model_path=f"{app_state.yolo_model}.pt")
     
-    # Initialize ReID
-    if app_state.reid is None:
-        print("Loading ReID model...")
-        app_state.reid = PlayerReID(backbone='resnet101')
+    # Initialize ReID (reload if backbone changed)
+    if app_state.reid is None or force_reload:
+        print(f"Loading ReID model with backbone: {app_state.reid_backbone}")
+        app_state.reid = PlayerReID(backbone=app_state.reid_backbone)
     
     # Initialize Camera
     if app_state.cap is None or not app_state.cap.isOpened():
@@ -248,20 +257,21 @@ def initialize_components():
         actual_height = int(app_state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"Camera resolution: {actual_width}x{actual_height}")
     
-    # Initialize Tracker
+    # Initialize Tracker (or update detector reference)
+    actual_width = int(app_state.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_height = int(app_state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
     if app_state.tracker is None:
-        actual_width = int(app_state.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(app_state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
         app_state.tracker = CameraTracker(
             com_port=app_state.com_port,
             baud_rate=115200,
             frame_width=actual_width,
             frame_height=actual_height
         )
-        # Share YOLO detector
-        app_state.tracker._detector = app_state.yolo
-        app_state.tracker.update_frame_size(actual_width, actual_height)
+    
+    # Share YOLO detector (update reference if reloaded)
+    app_state.tracker._detector = app_state.yolo
+    app_state.tracker.update_frame_size(actual_width, actual_height)
     
     print("Components initialized!")
 
@@ -313,6 +323,9 @@ def video_processing_loop():
         if current_time - last_emit_time >= emit_interval:
             emit_frame(annotated_frame)
             last_emit_time = current_time
+
+        # debug state
+        # print(app_state.game_manager.get_game_state_dict().get("state"))
     
     print("Video processing loop ended")
 
@@ -346,6 +359,7 @@ def process_game_frame(frame):
         # Waiting for throw - start tracking player
         gm.start_throw()
         socketio.emit('game_state', gm.get_game_state_dict())
+        socketio.emit('tracking_status', {'target': 'person', 'found': False})
     
     if gm.state == GameState.TRACKING_PLAYER:
         frame = track_player(frame, results, current_player.name)
@@ -372,7 +386,8 @@ def track_player(frame, results, player_name):
     for crop, (x1, y1, x2, y2) in persons:
         identified, score, _ = app_state.reid.identify_player(crop, threshold=0.5)
         
-        if identified == player_name:
+        # if identified == player_name:
+        if True:
             target_box = (x1, y1, x2, y2)
             app_state.current_player_crop = crop
             
@@ -390,15 +405,17 @@ def track_player(frame, results, player_name):
         # Calculate error and send to tracker
         error_x = (app_state.tracker.frame_center_x - cx) / app_state.tracker.frame_center_x
         error_y = (app_state.tracker.frame_center_y - cy) / app_state.tracker.frame_center_y
-        
-        pan_speed = app_state.tracker._calculate_pan_speed(error_x)
-        tilt_angle = app_state.tracker._calculate_tilt_angle(error_y)
-        
+        # print("Error X:", error_x)
+        # print("Error Y:", error_y)
+        pan_speed = app_state.tracker._calculate_pan_speed(error_x, is_tennis=False)
+        new_tilt_angle = app_state.tracker._calculate_tilt_angle(error_y)
+        # print("Pan Speed:", pan_speed)
+        # print("New Tilt Angle:", new_tilt_angle)
         # Update tracker state (critical for incremental tilt adjustment!)
-        app_state.tracker.current_tilt_angle = tilt_angle
+        app_state.tracker.current_tilt_angle = new_tilt_angle
         
         # print(f"Pan Speed: {pan_speed}, Tilt Angle: {tilt_angle}")
-        app_state.tracker._send_command(pan_speed, tilt_angle)
+        app_state.tracker._send_command(pan_speed, new_tilt_angle)
     elif app_state.tracker and app_state.tracker.connected:
         # Target not found - stop pan motor, maintain tilt
         app_state.tracker._send_command(90, app_state.tracker.current_tilt_angle)
@@ -468,12 +485,12 @@ def track_bottles(frame, results):
     if app_state.tracker:
         app_state.tracker.camera_track(frame, "bottle")
     
-    # Draw bottles
-    bottles = get_standing_bottles(results)
-    for (x1, y1, x2, y2) in bottles:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, "Standing", (x1, y1 - 10),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    # # Draw bottles
+    # bottles = get_standing_bottles(results)
+    # for (x1, y1, x2, y2) in bottles:
+    #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    #     cv2.putText(frame, "Standing", (x1, y1 - 10),
+    #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     
     # Check countdown
     if app_state.counting_start_time:

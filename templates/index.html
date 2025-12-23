@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/static/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div id="app">
         <!-- Header -->
@@ -33,7 +35,34 @@
                 </div>
                 <div class="form-group">
                     <label for="cameraSource">Camera Source</label>
-                    <input type="text" id="cameraSource" value="0" placeholder="0, 1, or video path">
+                    <input type="text" id="cameraSource" value="1" placeholder="0, 1, or video path">
+                </div>
+                <div class="form-group">
+                    <label for="yoloModel">YOLO Model</label>
+                    <select id="yoloModel">
+                        <option value="yolo11n">YOLO11n (Fast)</option>
+                        <option value="yolo11s">YOLO11s</option>
+                        <option value="yolo11m" selected>YOLO11m (Balanced)</option>
+                        <option value="yolo11l">YOLO11l</option>
+                        <option value="yolo11x">YOLO11x (Accurate)</option>
+                        <option value="yolov8n">YOLOv8n (Fast)</option>
+                        <option value="yolov8s">YOLOv8s</option>
+                        <option value="yolov8m">YOLOv8m</option>
+                        <option value="yolov8l">YOLOv8l</option>
+                        <option value="yolov8x">YOLOv8x (Accurate)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reidBackbone">ReID Backbone</label>
+                    <select id="reidBackbone">
+                        <option value="resnet50" selected>ResNet50 (Fast)</option>
+                        <option value="resnet101">ResNet101 (Accurate)</option>
+                        <option value="mobilenetv2">MobileNetV2 (Lightweight)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="numBottles">Number of Bottles (Pins)</label>
+                    <input type="number" id="numBottles" value="10" min="1" max="20" placeholder="10">
                 </div>
                 <div class="form-group">
                     <label for="numFrames">Number of Frames: <span id="framesValue">10</span></label>
@@ -81,7 +110,7 @@
                 <!-- Main Video Area -->
                 <div class="main-video-area">
                     <img id="gameVideoFeed" class="video-feed" alt="Camera Feed">
-                    
+
                     <!-- Player Crop Overlay -->
                     <div class="player-crop-container" id="playerCropContainer">
                         <div class="player-crop-header">
@@ -89,12 +118,12 @@
                         </div>
                         <img id="playerCropFeed" class="player-crop-feed" alt="Player Crop">
                     </div>
-                    
+
                     <!-- Tracking Status Overlay -->
                     <div class="tracking-overlay" id="trackingOverlay">
                         <span class="tracking-target" id="trackingTarget">Tracking: Player</span>
                     </div>
-                    
+
                     <!-- Countdown Overlay -->
                     <div class="countdown-overlay" id="countdownOverlay" style="display: none;">
                         <span id="countdownNumber">3</span>
@@ -192,4 +221,5 @@
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="/static/app.js"></script>
 </body>
+
 </html>

@@ -181,16 +181,22 @@ function startSetup() {
     const comPort = document.getElementById('comPort').value;
     const cameraSource = document.getElementById('cameraSource').value;
     const numFrames = parseInt(document.getElementById('numFrames').value);
+    const numBottles = parseInt(document.getElementById('numBottles').value) || 10;
+    const yoloModel = document.getElementById('yoloModel').value;
+    const reidBackbone = document.getElementById('reidBackbone').value;
 
     // Send settings to server
     state.socket.emit('set_settings', {
         com_port: comPort,
         camera_source: cameraSource,
-        num_frames: numFrames
+        num_frames: numFrames,
+        num_bottles: numBottles,
+        yolo_model: yoloModel,
+        reid_backbone: reidBackbone
     });
 
     showScreen('registration');
-    showToast('Settings saved. Ready for player registration.', 'success');
+    showToast(`Loading models: ${yoloModel}, ${reidBackbone}...`, 'info');
 }
 
 // ==========================================

@@ -51,13 +51,13 @@ class CameraTracker:
         self.current_tilt_angle = 90  # Start at center position (0-180)
         
         # Dead zone settings (as ratio, error is normalized to -1 ~ 1)
-        self.dead_zone_x = 0.06  # 8% from center
-        self.dead_zone_y = 0.2   # 10% from center
+        self.dead_zone_x = 0.08  # 8% from center
+        self.dead_zone_y = 0.08   # 8% from center
         
         # Speed/angle adjustment settings
         self.max_pan_deviation = 90   # Max deviation from 90 (stop) for pan speed
-        self.pan_speed_factor = self.max_pan_deviation-35   # How much error affects pan speed (for sqrt curve)
-        self.tilt_step = 2        # Degrees to move per frame for tilt
+        self.pan_speed_factor = self.max_pan_deviation - 35   # org:35. How much error affects pan speed (for sqrt curve)
+        self.tilt_step = 3        # Degrees to move per frame for tilt
         
         # Tilt limits
         self.tilt_min = 0   # Minimum tilt angle (looking up)
@@ -198,7 +198,7 @@ class CameraTracker:
             print(f"Error sending command: {e}")
             return False
     
-    def _calculate_pan_speed(self, error_x):
+    def _calculate_pan_speed(self, error_x, is_tennis):
         """
         Calculate pan motor speed based on horizontal error.
 
@@ -224,13 +224,18 @@ class CameraTracker:
         # Far from center: slower growth (prevents overshooting)
         # sign = 1 if error_x >= 0 else -1
         # abs_error = abs(error_x)*
-        speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
+
+        if is_tennis:
+            # speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
+            speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x) * self.pan_speed_factor
+        else:
+            speed_deviation = np.tanh(error_x) * self.pan_speed_factor
         
         # Constrain deviation
         speed_deviation = max(-self.max_pan_deviation, 
                              min(self.max_pan_deviation, speed_deviation))
-        if abs(speed_deviation) < 22:
-            speed_deviation = (np.sign(speed_deviation) or 1) * 22  # or 1 處理 0 的情況
+        # if abs(speed_deviation) < 22:
+        #     speed_deviation = (np.sign(speed_deviation) or 1) * 22  # or 1 處理 0 的情況
         # if speed_deviation > 0:
         #     pan_speed = 100 + speed_deviation
         # else:
@@ -330,11 +335,17 @@ class CameraTracker:
         # Divide by half frame size to normalize
         error_x = (self.frame_center_x - cx) / self.frame_center_x  # Positive = object is left
         error_y = (self.frame_center_y - cy) / self.frame_center_y  # Positive = object is above
-        
+        # print("Error X:", error_x)
+        # print("Error Y:", error_y)
         # Calculate motor commands
-        pan_speed = self._calculate_pan_speed(error_x)
+        is_tennis = False   
+        if target_label == "tennis_ball":
+            is_tennis = True
+
+        pan_speed = self._calculate_pan_speed(error_x, is_tennis)
         new_tilt_angle = self._calculate_tilt_angle(error_y)
-        
+        # print("Pan Speed:", pan_speed)
+        # print("New Tilt Angle:", new_tilt_angle)
         # Update state
         self.current_tilt_angle = new_tilt_angle
         

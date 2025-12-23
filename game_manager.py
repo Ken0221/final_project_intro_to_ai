@@ -232,8 +232,9 @@ class GameManager:
     - Game state transitions
     """
     
-    def __init__(self, num_frames: int = 10):
+    def __init__(self, num_frames: int = 10, num_bottles: int = 10):
         self.num_frames = min(10, max(1, num_frames))  # 1-10 frames
+        self.num_bottles = max(1, num_bottles)  # At least 1 bottle
         self.state = GameState.SETTINGS
         self.players: List[Player] = []
         self.current_player_index = 0
@@ -243,7 +244,7 @@ class GameManager:
         self.tracking_target: str = "person"  # Current tracking target
         self.last_ball_seen_time: Optional[float] = None
         self.counting_start_time: Optional[float] = None
-        self.standing_bottles_before_throw: int = 10
+        self.standing_bottles_before_throw: int = self.num_bottles
         
         # Settings
         self.com_port: str = "/dev/cu.usbmodem1201"
@@ -251,10 +252,12 @@ class GameManager:
         # Score correction
         self.last_throw_info: Optional[Dict] = None  # For score correction
     
-    def set_settings(self, com_port: str, num_frames: int) -> None:
+    def set_settings(self, com_port: str, num_frames: int, num_bottles: int = 10) -> None:
         """Set game settings"""
         self.com_port = com_port
         self.num_frames = min(10, max(1, num_frames))
+        self.num_bottles = max(1, num_bottles)
+        self.standing_bottles_before_throw = self.num_bottles
     
     def register_player(self, name: str) -> bool:
         """Register a new player"""
@@ -281,7 +284,7 @@ class GameManager:
         
         self.state = GameState.WAITING_FOR_THROW
         self.current_player_index = 0
-        self.standing_bottles_before_throw = 10
+        self.standing_bottles_before_throw = self.num_bottles
         return True
     
     def get_current_player(self) -> Optional[Player]:
@@ -309,7 +312,7 @@ class GameManager:
         """Called when a throw sequence begins"""
         self.state = GameState.TRACKING_PLAYER
         self.tracking_target = "person"
-        self.standing_bottles_before_throw = 10
+        self.standing_bottles_before_throw = self.num_bottles
     
     def on_ball_detected(self) -> None:
         """Called when the ball is detected (leaving player's hand)"""
@@ -385,7 +388,7 @@ class GameManager:
             "frame": frame_idx + 1,
             "throw": throw_num,
             "pins_knocked": pins_knocked,
-            "is_strike": throw_num == 1 and pins_knocked == 10,
+            "is_strike": throw_num == 1 and pins_knocked == self.num_bottles,
             "is_spare": throw_num == 2 and frame.is_spare(),
             "frame_complete": frame.is_complete(is_tenth),
             "total_score": player.get_total_score(),
@@ -399,16 +402,16 @@ class GameManager:
                 result["game_over"] = True
             else:
                 self._next_player()
-                self.standing_bottles_before_throw = 10
+                self.standing_bottles_before_throw = self.num_bottles
                 self.state = GameState.WAITING_FOR_THROW
         else:
             # Same player, next throw
             if is_tenth:
                 # In 10th frame, reset pins after strike
-                if throw_num == 1 and pins_knocked == 10:
-                    self.standing_bottles_before_throw = 10
-                elif throw_num == 2 and frame.throw1 + frame.throw2 >= 10:
-                    self.standing_bottles_before_throw = 10
+                if throw_num == 1 and pins_knocked == self.num_bottles:
+                    self.standing_bottles_before_throw = self.num_bottles
+                elif throw_num == 2 and frame.throw1 + frame.throw2 >= self.num_bottles:
+                    self.standing_bottles_before_throw = self.num_bottles
                 else:
                     self.standing_bottles_before_throw = standing_bottles
             else:
@@ -529,7 +532,7 @@ class GameManager:
         self.current_player_index = 0
         self.state = GameState.REGISTRATION
         self.last_throw_info = None
-        self.standing_bottles_before_throw = 10
+        self.standing_bottles_before_throw = self.num_bottles
 
 
 # Test code
