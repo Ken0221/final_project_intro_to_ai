@@ -38,7 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description='Tennis Ball Tracking Test')
     parser.add_argument('--source', type=str, default='default',
                         help=f'Camera source: index or preset ({", ".join(CAMERA_PRESETS.keys())})')
-    parser.add_argument('--model', type=str, default='yolo11s',
+    parser.add_argument('--model', type=str, default='yolo11m',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x', 'best'],
                         help='YOLO model to use')
@@ -151,10 +151,10 @@ def main():
             cv2.drawMarker(frame, (cx_frame, cy_frame), (255, 255, 255), 
                            cv2.MARKER_CROSS, 20, 2)
 
-            # Draw dead zone rectangle
-            dz_x = tracker.dead_zone_x
-            dz_y = tracker.dead_zone_y
-            cv2.rectangle(frame, 
+            # Draw dead zone rectangle (convert ratio to pixels)
+            dz_x = int(tracker.dead_zone_x * tracker.frame_center_x)
+            dz_y = int(tracker.dead_zone_y * tracker.frame_center_y)
+            cv2.rectangle(frame,
                           (cx_frame - dz_x, cy_frame - dz_y),
                           (cx_frame + dz_x, cy_frame + dz_y),
                           (100, 100, 100), 1)
