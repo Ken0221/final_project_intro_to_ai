@@ -7,3 +7,5 @@ ultralytics
 pillow
 numpy
 pyserial
+flask
+flask-socketio

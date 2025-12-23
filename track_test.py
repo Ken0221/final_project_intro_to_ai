@@ -38,7 +38,7 @@ def main():
     parser = argparse.ArgumentParser(description='Tennis Ball Tracking Test')
     parser.add_argument('--source', type=str, default='default',
                         help=f'Camera source: index or preset ({", ".join(CAMERA_PRESETS.keys())})')
-    parser.add_argument('--model', type=str, default='yolo11m',
+    parser.add_argument('--model', type=str, default='yolo11n',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x', 'best'],
                         help='YOLO model to use')
