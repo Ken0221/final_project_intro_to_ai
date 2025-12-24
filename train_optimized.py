@@ -42,6 +42,7 @@ def train_optimized():
         # Augmentation adjustments
         mosaic=1.0,             # Strong spatial augmentation
         mixup=0.15,             # Mixup to help with generalization
+        scale=0.9,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
         box=7.5,                # High box loss gain (focus on accurate bounding boxes)

@@ -18,10 +18,10 @@ CLASS_MAPPING = {
         'original_classes': ['tennisball'],
         'new_ids': [0]  # tennisball -> 0
     },
-    'tennisgame_dataset': {
-        'original_classes': ['tennis ball'],
-        'new_ids': [0]  # tennisball -> 0 (Same ID as other tennis balls)
-    },
+    # 'tennisgame_dataset': {
+    #     'original_classes': ['tennis ball'],
+    #     'new_ids': [0]  # tennisball -> 0 (Same ID as other tennis balls)
+    # },
     'bottle_dataset': {
         'original_classes': ['plastic-bottle'],
         'new_ids': [1]  # plastic-bottle -> 1

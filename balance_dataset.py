@@ -17,6 +17,8 @@ def balance_dataset(target_count=2000):
 
     print(" Analyzing class distribution...")
     
+    print(" Analyzing class distribution...")
+    
     # Analyze current distribution
     class_counts = {0: 0, 1: 0, 2: 0} # 0: tennisball, 1: bottle, 2: person
     image_files = list((train_dir / "images").glob("*.jpg")) + list((train_dir / "images").glob("*.jpeg")) + list((train_dir / "images").glob("*.png"))
@@ -52,43 +54,60 @@ def balance_dataset(target_count=2000):
             
         file_class_map[img_file] = primary_class
 
-    print("\n Current Distribution (Approximate by 'primary' content):")
+    print("\n Current Distribution:")
     print(f"  Class 0 (Tennis Ball): {class_counts[0]}")
     print(f"  Class 1 (Bottle):      {class_counts[1]}")
     print(f"  Class 2 (Person):      {class_counts[2]}")
     
-    target_classes = [0, 1]
+    target_classes = [0, 1, 2] # Process ALL classes
     
     for cls in target_classes:
         current_count = class_counts[cls]
-        if current_count >= target_count:
-            print(f"Class {cls} count ({current_count}) is already sufficient.")
+        
+        if current_count == target_count:
+            print(f"Class {cls} count ({current_count}) is perfect.")
             continue
             
-        needed = target_count - current_count
-        print(f"\n Upsampling Class {cls}: Need {needed} more images...")
-        
-        # Get all original images for this class
-        candidates = [img for img, c in file_class_map.items() if c == cls]
-        
-        if not candidates:
-            print(f"  Warning: No candidates found for class {cls}!")
-            continue
+        if current_count < target_count:
+            # UPSAMPLE
+            needed = target_count - current_count
+            print(f"\n Upsampling Class {cls}: Need {needed} more images...")
             
-        # Duplicate until we reach target
-        for i in tqdm(range(needed), desc=f"Duplicating Class {cls}"):
-            src_img = random.choice(candidates)
-            src_label = train_dir / "labels" / f"{src_img.stem}.txt"
+            candidates = [img for img, c in file_class_map.items() if c == cls]
             
-            # Create new unique name
-            new_name = f"{src_img.stem}_dup_{i}"
-            dst_img = train_dir / "images" / f"{new_name}{src_img.suffix}"
-            dst_label = train_dir / "labels" / f"{new_name}.txt"
+            if not candidates:
+                print(f"  Warning: No candidates found for class {cls}!")
+                continue
+                
+            for i in tqdm(range(needed), desc=f"Duplicating Class {cls}"):
+                src_img = random.choice(candidates)
+                src_label = train_dir / "labels" / f"{src_img.stem}.txt"
+                
+                new_name = f"{src_img.stem}_dup_{i}"
+                dst_img = train_dir / "images" / f"{new_name}{src_img.suffix}"
+                dst_label = train_dir / "labels" / f"{new_name}.txt"
+                
+                shutil.copy2(src_img, dst_img)
+                if src_label.exists():
+                    shutil.copy2(src_label, dst_label)
+                    
+        elif current_count > target_count:
+            # DOWNSAMPLE
+            needed_to_remove = current_count - target_count
+            print(f"\n Downsampling Class {cls}: Removing {needed_to_remove} images...")
             
-            shutil.copy2(src_img, dst_img)
-            shutil.copy2(src_label, dst_label)
+            candidates = [img for img, c in file_class_map.items() if c == cls]
+            to_remove = random.sample(candidates, needed_to_remove)
             
+            for img in tqdm(to_remove, desc=f"Removing Class {cls}"):
+                # Remove image
+                img.unlink()
+                # Remove label
+                lbl = train_dir / "labels" / f"{img.stem}.txt"
+                if lbl.exists():
+                    lbl.unlink()
+
     print("\nBalancing Complete!")
     
 if __name__ == "__main__":
-    balance_dataset(target_count=4000)
+    balance_dataset(target_count=2000)
