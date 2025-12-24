@@ -46,7 +46,7 @@ README.dataset.txt
 README.roboflow.txt
 
 # Training results
-runs/
+# runs/
 
 # Large model weights (optional - comment out if you want to commit them)
 *.pt
