@@ -30,7 +30,7 @@ def train_optimized():
     
     model.train(
         data=dataset_yaml,
-        epochs=30,
+        epochs=50,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
@@ -52,7 +52,7 @@ def train_optimized():
         lr0=0.001,
         lrf=0.01,
         patience=10,
-        name="yolo11n_highres_balanced",
+        name="yolo11n_highres_balanced_0.99scale",
         save=True,
         exist_ok=True,
         pretrained=True
