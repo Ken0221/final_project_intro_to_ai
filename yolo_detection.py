@@ -18,8 +18,8 @@ class YOLODetector:
             print(f"YOLO Detector initialized on device: {self.model.device} (CPU)")
         
         # COCO class IDs
-        self.CLASS_PERSON = 0
-        self.CLASS_BOTTLE = 39
+        self.CLASS_PERSON = 2
+        self.CLASS_BOTTLE = 1
 
         # Tennis ball mapping - treat these COCO classes as tennis_ball
         # sports ball (32), frisbee (29), baseball glove (35), apple (47), orange (49)
@@ -79,5 +79,6 @@ class YOLODetector:
                     cls_name = "tennis_ball"
                 else:
                     cls_name = self.model.names[cls_id]
+                # cls_name = self.model.names[cls_id]
                 attrs.append((cls_name, box.xyxy[0], confidence))
         return attrs

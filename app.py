@@ -54,6 +54,10 @@ class AppState:
         
         self.running = False
         self.video_thread = None
+
+        # hyperparameter
+        self.conf = 0.1
+        self.iou = 0.7
         
         # Current frame data
         self.current_frame = None
@@ -140,7 +144,7 @@ def handle_register_player(data):
         frame = app_state.current_frame.copy()
         
         # Detect persons
-        results = app_state.yolo.detect(frame)
+        results = app_state.yolo.detect(frame, conf=app_state.conf, iou=app_state.iou)
         persons = app_state.yolo.get_person_crops(frame, results)
         
         if persons:
@@ -331,7 +335,7 @@ def video_processing_loop():
 
 def process_registration_frame(frame):
     """Process frame during registration phase"""
-    results = app_state.yolo.detect(frame)
+    results = app_state.yolo.detect(frame, conf=app_state.conf, iou=app_state.iou)
     persons = app_state.yolo.get_person_crops(frame, results)
     
     # Draw person detections
@@ -347,7 +351,7 @@ def process_game_frame(frame):
     gm = app_state.game_manager
     
     # Run YOLO detection
-    results = app_state.yolo.detect(frame)
+    results = app_state.yolo.detect(frame, conf=app_state.conf, iou=app_state.iou)
     
     # Get current player info
     current_player = gm.get_current_player()
@@ -426,14 +430,14 @@ def track_player(frame, results, player_name):
     
     # Check for ball - transition to TRACKING_BALL
     all_objects = app_state.yolo.get_everything_attr(results)
-    ball_found = any(cls.lower() == 'tennis_ball' for cls, _ in all_objects)
+    ball_found = any(cls.lower() == 'tennisball' for cls, _, _ in all_objects)
     
     if ball_found:
         app_state.ball_visible_count += 1
         if app_state.ball_visible_count >= app_state.BALL_DETECT_THRESHOLD:
             gm.on_ball_detected()
             app_state.ball_visible_count = 0
-            socketio.emit('tracking_status', {'target': 'tennis_ball', 'found': True})
+            socketio.emit('tracking_status', {'target': 'tennisball', 'found': True})
             socketio.emit('game_state', gm.get_game_state_dict())
     else:
         app_state.ball_visible_count = 0
@@ -446,7 +450,7 @@ def track_ball(frame, results):
     
     # Track ball with gimbal
     if app_state.tracker:
-        result = app_state.tracker.camera_track(frame, "tennis_ball")
+        result = app_state.tracker.camera_track(frame, "tennisball", conf=app_state.conf, iou=app_state.iou)
         
         if result['found']:
             app_state.ball_lost_count = 0
@@ -472,7 +476,7 @@ def track_ball(frame, results):
     if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
         gm.on_bottles_visible()
         app_state.counting_start_time = time.time()
-        socketio.emit('tracking_status', {'target': 'bottle', 'found': True})
+        socketio.emit('tracking_status', {'target': 'plastic-bottle', 'found': True})
         socketio.emit('game_state', gm.get_game_state_dict())
     
     return frame
@@ -483,7 +487,7 @@ def track_bottles(frame, results):
     
     # Track bottles with gimbal
     if app_state.tracker:
-        app_state.tracker.camera_track(frame, "bottle")
+        app_state.tracker.camera_track(frame, "plastic-bottle", conf=app_state.conf, iou=app_state.iou)
     
     # # Draw bottles
     # bottles = get_standing_bottles(results)
@@ -616,7 +620,7 @@ def cleanup():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bowling Scorer Web App')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to')
-    parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
+    parser.add_argument('--port', type=int, default=5001, help='Port to bind to')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     
     args = parser.parse_args()
