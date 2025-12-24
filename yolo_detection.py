@@ -25,12 +25,12 @@ class YOLODetector:
         # sports ball (32), frisbee (29), baseball glove (35), apple (47), orange (49)
         self.TENNIS_BALL_CLASSES = {32, 29, 35, 47, 49}
 
-    def detect(self, frame, verbose=False):
+    def detect(self, frame, conf=0.25, iou=0.7, verbose=False):
         
         """
         Run inference on a frame.
         """
-        return self.model(frame, verbose=verbose)
+        return self.model(frame, conf=conf, iou=iou, verbose=verbose)
 
     def get_person_crops(self, frame, results):
         """
@@ -65,17 +65,19 @@ class YOLODetector:
     def get_everything_attr(self, results):
         """
         Extract all attributes from results.
-        Returns a list of (attr, box_coords) tuples.
+        Returns a list of (attr, box_coords, confidence) tuples.
         box_coords = (x1, y1, x2, y2)
+        confidence = detection confidence score (0.0 - 1.0)
         """
         attrs = []
         for result in results:
             for box in result.boxes:
                 cls_id = int(box.cls[0])
+                confidence = float(box.conf[0])
                 # Map certain classes to tennis_ball
                 if cls_id in self.TENNIS_BALL_CLASSES:
                     cls_name = "tennis_ball"
                 else:
                     cls_name = self.model.names[cls_id]
-                attrs.append((cls_name, box.xyxy[0]))
+                attrs.append((cls_name, box.xyxy[0], confidence))
         return attrs
