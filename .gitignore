@@ -21,7 +21,15 @@ ENV/
 # Project Key/Secrets
 .env
 
+# Dataset
+*_dataset/
+
+# training results
+runs/
+
 # Project specific
 player_db/
+
 # Uncomment if you want to ignore model weights
 *.pt 
+!merged_v2.pt
