@@ -139,7 +139,7 @@ def main():
             if show_everything:
                 results = yolo.detect(frame)
                 attrs = yolo.get_everything_attr(results)
-                for cls, box_coords in attrs:
+                for cls, box_coords, _ in attrs:
                     x1, y1, x2, y2 = map(int, box_coords)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     cv2.putText(frame, f"{cls}", (x1, y1 - 10),

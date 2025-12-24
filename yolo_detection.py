@@ -18,21 +18,20 @@ class YOLODetector:
             print(f"YOLO Detector initialized on device: {self.model.device} (CPU)")
         
         # COCO class IDs
-        self.CLASS_PERSON = 0
-        self.CLASS_BOTTLE = 39
+        self.CLASS_PERSON = 2
+        self.CLASS_BOTTLE = 1
 
         # Tennis ball mapping - treat these COCO classes as tennis_ball
         # sports ball (32), frisbee (29), baseball glove (35), apple (47), orange (49)
         self.TENNIS_BALL_CLASSES = {32, 29, 35, 47, 49}
 
-    def detect(self, frame, conf=0.25, iou=0.7, verbose=False):
-        
+    def detect(self, frame, conf=0.25, iou=0.5, verbose=False):
         """
         Run inference on a frame.
         """
         return self.model(frame, conf=conf, iou=iou, verbose=verbose)
 
-    def get_person_crops(self, frame, results):
+    def get_person_crops(self, frame, results, conf=0.25):
         """
         Extract person crops and their bounding boxes from results.
         Returns a list of (crop, box_coords) tuples.
@@ -42,6 +41,8 @@ class YOLODetector:
         for result in results:
             for box in result.boxes:
                 if int(box.cls[0]) == self.CLASS_PERSON:
+                    if float(box.conf[0]) < conf:
+                        continue
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     # Crop person
                     person_img = frame[y1:y2, x1:x2]
@@ -49,7 +50,7 @@ class YOLODetector:
                         persons.append((person_img, (x1, y1, x2, y2)))
         return persons
 
-    def get_bottles(self, results):
+    def get_bottles(self, results, conf=0.25):
         """
         Extract bottle bounding boxes.
         Returns a list of box objects.
@@ -58,11 +59,13 @@ class YOLODetector:
         for result in results:
             for box in result.boxes:
                 if int(box.cls[0]) == self.CLASS_BOTTLE:
+                    if float(box.conf[0]) < conf:
+                        continue
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     bottles.append((x1, y1, x2, y2))
         return bottles
 
-    def get_everything_attr(self, results):
+    def get_everything_attr(self, results, conf=0.0):
         """
         Extract all attributes from results.
         Returns a list of (attr, box_coords, confidence) tuples.
@@ -74,6 +77,13 @@ class YOLODetector:
             for box in result.boxes:
                 cls_id = int(box.cls[0])
                 confidence = float(box.conf[0])
+                
+                # Determine threshold for this class
+                threshold = conf
+                
+                if confidence < threshold:
+                    continue
+
                 # Map certain classes to tennis_ball
                 if cls_id in self.TENNIS_BALL_CLASSES:
                     cls_name = "tennis_ball"

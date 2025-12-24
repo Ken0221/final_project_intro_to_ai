@@ -281,7 +281,7 @@ class CameraTracker:
         # print(f"New Tilt Angle: {new_angle}")
         return int(new_angle)
     
-    def camera_track(self, frame, target_label):
+    def camera_track(self, frame, target_label, conf=0.25):
         """
         Main tracking function - detect object and control servos.
         
@@ -308,14 +308,14 @@ class CameraTracker:
         }
         
         # Run YOLO detection
-        detection_results = self.detector.detect(frame)
+        detection_results = self.detector.detect(frame, conf=conf)
         
         # Get all detected objects with their attributes
-        all_objects = self.detector.get_everything_attr(detection_results)
+        all_objects = self.detector.get_everything_attr(detection_results, conf=conf)
         
         # Search for target object
         target_box = None
-        for class_name, box_coords in all_objects:
+        for class_name, box_coords, _ in all_objects:
             if class_name.lower() == target_label.lower():
                 target_box = box_coords
                 break  # Use first match

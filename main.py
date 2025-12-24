@@ -115,7 +115,7 @@ def main():
         results = yolo.detect(frame, conf=args.conf)
 
         if show_everything:
-            attrs = yolo.get_everything_attr(results)
+            attrs = yolo.get_everything_attr(results, conf=args.conf)
             for cls, box_coords, conf in attrs:
                 x1, y1, x2, y2 = map(int, box_coords)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -129,7 +129,7 @@ def main():
         player_score = 0.0
         
         # Get persons using helper
-        persons = yolo.get_person_crops(frame, results)
+        persons = yolo.get_person_crops(frame, results, conf=args.conf)
 
         # If we're collecting registration samples (pressed 'r' before saving with 's'),
         # force all detected persons to be displayed as Unknown.
@@ -228,7 +228,7 @@ def main():
         # ---------------------------
         # Bottle Detection Logic
         # ---------------------------
-        bottles = yolo.get_bottles(results)
+        bottles = yolo.get_bottles(results, conf=args.conf)
         
         for (x1, y1, x2, y2) in bottles:
             # Draw bounding box
