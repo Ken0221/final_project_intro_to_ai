@@ -4,7 +4,7 @@ import random
 from pathlib import Path
 from tqdm import tqdm
 
-def balance_dataset(target_count=2000):
+def balance_dataset(target_count=4000):
     """
     Balances the merged datasets by upsampling (duplicating) rare classes.
     """
@@ -110,4 +110,4 @@ def balance_dataset(target_count=2000):
     print("\nBalancing Complete!")
     
 if __name__ == "__main__":
-    balance_dataset(target_count=2000)
+    balance_dataset(target_count=4000)
