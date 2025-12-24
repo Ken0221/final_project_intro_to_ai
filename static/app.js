@@ -15,7 +15,8 @@ const state = {
     players: [],
     gameState: null,
     lastThrowInfo: null,
-    arduinoConnected: false
+    arduinoConnected: false,
+    numFrames: 0 // Track number of frames to rebuild header only when needed
 };
 
 // ==========================================
@@ -280,6 +281,12 @@ function updatePlayerCrop(cropData, playerName) {
 function updateGameState(data) {
     state.gameState = data;
 
+    // Check if we need to update the scoreboard header
+    if (state.numFrames !== data.num_frames) {
+        state.numFrames = data.num_frames;
+        renderScoreboardHeader(data.num_frames);
+    }
+
     // Update game info bar
     document.getElementById('currentFrame').textContent =
         `${data.current_frame}/${data.num_frames}`;
@@ -289,7 +296,7 @@ function updateGameState(data) {
         data.current_player_name || '---';
 
     // Update scoreboard
-    updateScoreboard(data.players);
+    updateScoreboard(data.players, data.num_frames);
 
     // Handle game over
     if (data.state === 'game_over') {
@@ -297,7 +304,41 @@ function updateGameState(data) {
     }
 }
 
-function updateScoreboard(players) {
+function renderScoreboardHeader(numFrames) {
+    const headerRow = document.getElementById('scoreboardHeaderRow');
+    if (!headerRow) return;
+
+    // Clear existing frame headers (keep Player and Total)
+    // We expect: [Player, ...frames..., Total]
+    // Player is index 0, Total is last.
+
+    // Remove all children except first and last? No, easier to rebuild.
+    headerRow.innerHTML = '';
+
+    // Player Column
+    const playerTh = document.createElement('th');
+    playerTh.className = 'player-name-col';
+    playerTh.textContent = 'Player';
+    headerRow.appendChild(playerTh);
+
+    // Frame Columns
+    for (let i = 1; i <= numFrames; i++) {
+        const th = document.createElement('th');
+        th.textContent = i;
+        if (i === numFrames) {
+            th.className = 'frame-10'; // Keep style for last frame if special
+        }
+        headerRow.appendChild(th);
+    }
+
+    // Total Column
+    const totalTh = document.createElement('th');
+    totalTh.className = 'total-col';
+    totalTh.textContent = 'Total';
+    headerRow.appendChild(totalTh);
+}
+
+function updateScoreboard(players, numFrames) {
     const tbody = document.getElementById('scoreboardBody');
     if (!tbody || !players) return;
 
@@ -317,22 +358,27 @@ function updateScoreboard(players) {
         row.appendChild(nameCell);
 
         // Frame cells
-        player.frames.forEach((frame, frameIdx) => {
+        // Render cells up to numFrames. Player might have fewer frames if data is weird, 
+        // but normally player.frames matches numFrames (initialized in backend).
+        for (let i = 0; i < numFrames; i++) {
+            const frame = player.frames[i] || {}; // Handle potential missing data
             const cell = document.createElement('td');
-            const isTenth = frameIdx === 9;
+            // Last frame logic (Standard bowling: 10th frame has 3 throws)
+            // Here: The LAST frame has 3 throws if playing full game logic.
+            const isLastFrame = (i === numFrames - 1);
 
             cell.innerHTML = `
                 <div class="frame-cell">
                     <div class="frame-throws">
-                        <div class="throw-box ${frame.is_strike ? 'strike' : ''}">${frame.throw1 || ''}</div>
-                        <div class="throw-box ${frame.is_spare ? 'spare' : ''}">${frame.throw2 || ''}</div>
-                        ${isTenth ? `<div class="throw-box">${frame.throw3 || ''}</div>` : ''}
+                        <div class="throw-box ${frame.is_strike ? 'strike' : ''}">${frame.throw1 !== undefined && frame.throw1 !== null ? frame.throw1 : ''}</div>
+                        <div class="throw-box ${frame.is_spare ? 'spare' : ''}">${frame.throw2 !== undefined && frame.throw2 !== null ? frame.throw2 : ''}</div>
+                        ${isLastFrame ? `<div class="throw-box">${frame.throw3 !== undefined && frame.throw3 !== null ? frame.throw3 : ''}</div>` : ''}
                     </div>
-                    <div class="frame-score">${frame.score !== null ? frame.score : ''}</div>
+                    <div class="frame-score">${frame.score !== null && frame.score !== undefined ? frame.score : ''}</div>
                 </div>
             `;
             row.appendChild(cell);
-        });
+        }
 
         // Total score
         const totalCell = document.createElement('td');

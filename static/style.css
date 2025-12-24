@@ -9,23 +9,23 @@
     --primary-dark: #4f46e5;
     --accent: #f59e0b;
     --accent-light: #fbbf24;
-    
+
     --bg-dark: #0f0f1a;
     --bg-card: #1a1a2e;
     --bg-card-hover: #252542;
     --bg-glass: rgba(26, 26, 46, 0.8);
-    
+
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    
+
     --success: #10b981;
     --warning: #f59e0b;
     --error: #ef4444;
-    
+
     --border-color: rgba(99, 102, 241, 0.2);
     --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-    
+
     /* Spacing */
     --radius: 12px;
     --radius-lg: 20px;
@@ -37,15 +37,27 @@
     box-sizing: border-box;
 }
 
+/* #app container to handle main layout */
+/* #app container to handle main layout */
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    /* Allow scrolling if content is too tall, but try to fit first */
+    overflow-y: auto;
+}
+
 body {
     font-family: 'Outfit', sans-serif;
     background: var(--bg-dark);
-    background-image: 
+    background-image:
         radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
         radial-gradient(ellipse at bottom right, rgba(245, 158, 11, 0.1) 0%, transparent 50%);
     color: var(--text-primary);
     min-height: 100vh;
-    overflow-x: hidden;
+    height: 100%;
+    /* Remove global overflow hidden to allow scrolling if needed */
+    overflow-y: auto;
 }
 
 /* ==========================================
@@ -60,9 +72,11 @@ body {
     background: var(--bg-glass);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
-    position: sticky;
-    top: 0;
+    /* Remove sticky/fixed, let flex handle flow */
+    position: relative;
     z-index: 100;
+    flex: 0 0 auto;
+    /* Don't shrink */
 }
 
 .header h1 {
@@ -108,8 +122,15 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 /* ==========================================
@@ -208,12 +229,41 @@ body {
 }
 
 .screen.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    /* Let flex grow fill it */
+    flex: 1;
+    /* Fill remaining space */
+    min-height: 0;
+    /* Important */
+    /* Ensure content is not flush against edges */
+    padding: 1rem;
+    /* Reduced padding from 2rem */
+    box-sizing: border-box;
+    /* Allow scrolling within screen if needed */
+    overflow-y: auto;
+}
+
+/* Specific override for Settings screen to allow scrolling if content overflows */
+#settingsScreen.active {
+    overflow-y: auto;
+    align-items: center;
+    justify-content: flex-start;
+    /* Extra padding at bottom to ensure submit button is visible when scrolled */
+    padding-bottom: 4rem;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ==========================================
@@ -221,17 +271,29 @@ body {
    ========================================== */
 
 .settings-card {
-    max-width: 500px;
-    margin: 4rem auto;
+    max-width: 400px;
+    /* Shrink width */
+    margin: 1rem auto;
+    width: 100%;
+    flex-shrink: 0;
+    padding: 1.5rem;
+    /* Shrink padding */
+    max-height: none;
+    /* Let page scroll handle it */
+    overflow: visible;
 }
 
 .settings-card h2 {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
+    /* Shrink margin */
     text-align: center;
+    font-size: 1.5rem;
+    /* Shrink font */
 }
 
 .form-group {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    /* Shrink gap */
 }
 
 .form-group label {
@@ -292,11 +354,13 @@ body {
    ========================================== */
 
 .registration-container {
-    display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+    gap: 1.5rem;
+    max-width: 100%;
+    margin: 0;
+    overflow: hidden;
 }
 
 .video-container {
@@ -304,13 +368,24 @@ body {
     border-radius: var(--radius-lg);
     overflow: hidden;
     background: var(--bg-card);
-    aspect-ratio: 16/9;
+    flex: 1;
+    /* Grow to fill available space */
+    min-width: 0;
+    /* Allow shrinking */
+    min-height: 0;
+    display: flex;
+    /* Centers the video image if necessary */
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: auto;
+    /* Remove fixed ratio to fill container */
 }
 
 .video-feed {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    /* Ensure full video is visible */
 }
 
 .video-overlay {
@@ -319,14 +394,20 @@ body {
     left: 0;
     right: 0;
     padding: 1rem;
-    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
     text-align: center;
 }
 
 .registration-panel {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
+    width: 320px;
+    /* Fixed width sidebar */
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+    /* Space for scrollbar if needed */
 }
 
 .registration-panel h2 {
@@ -372,17 +453,44 @@ body {
    ========================================== */
 
 .game-container {
-    max-width: 1600px;
-    margin: 0 auto;
+    width: 100%;
+    /* Flex grow inside screen */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0.5rem;
 }
 
+/* Main Video Area: The Flex Container */
 .main-video-area {
     position: relative;
     border-radius: var(--radius-lg);
-    overflow: hidden;
     background: var(--bg-card);
-    aspect-ratio: 16/9;
-    margin-bottom: 1rem;
+    /* Flex grow: fill ALL remaining space */
+    flex: 1;
+    width: 100%;
+    /* Ensure it has at least some height so it doesn't collapse */
+    min-height: 200px;
+
+    /* Flexbox to center the image */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+/* The Video Feed: Standard containment */
+.main-video-area .video-feed {
+    /* Constrain to container size */
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+
+    object-fit: contain;
+    /* Maintain aspect ratio */
+    display: block;
 }
 
 /* Player Crop Overlay */
@@ -390,13 +498,20 @@ body {
     position: absolute;
     top: 1rem;
     right: 1rem;
-    width: 25%;
+    /* Auto width/height to fit image aspect ratio */
+    width: auto;
+    height: auto;
+    /* Constraints */
+    max-width: 25%;
+    max-height: 40%;
     background: var(--bg-glass);
     backdrop-filter: blur(8px);
     border-radius: var(--radius);
     overflow: hidden;
     border: 2px solid var(--primary);
     box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
 }
 
 .player-crop-header {
@@ -404,12 +519,16 @@ body {
     background: var(--primary);
     font-size: 0.875rem;
     font-weight: 500;
+    text-align: center;
+    width: 100%;
 }
 
 .player-crop-feed {
-    width: 100%;
-    aspect-ratio: 3/4;
-    object-fit: cover;
+    display: block;
+    /* Allow image to define size, but constrained by container max-width/height */
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
 }
 
 /* Tracking Overlay */
@@ -469,11 +588,15 @@ body {
 .game-info-bar {
     display: flex;
     justify-content: center;
-    gap: 2rem;
-    padding: 1rem 2rem;
+    gap: 0.75rem;
+    /* Tighter gap */
+    padding: 0.1rem 0.25rem;
+    /* Ultra compact padding */
     background: var(--bg-card);
     border-radius: var(--radius);
-    margin-bottom: 1rem;
+    margin-bottom: 0.1rem;
+    /* Minimal margin */
+    flex-shrink: 0;
 }
 
 .info-item {
@@ -481,16 +604,17 @@ body {
 }
 
 .info-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
+    display: inline-block;
+    /* Inline label */
+    font-size: 0.65rem;
+    /* Tiny label */
+    margin-right: 0.25rem;
+    margin-bottom: 0;
 }
 
 .info-value {
-    font-size: 1.25rem;
+    font-size: 0.9rem;
+    /* Small value */
     font-weight: 600;
 }
 
@@ -504,7 +628,13 @@ body {
 
 .scoreboard-container {
     overflow-x: auto;
-    margin-bottom: 1rem;
+    margin-bottom: 0.25rem;
+    flex-shrink: 0;
+    /* Max width constraint to help compactness */
+    width: 95%;
+    /* Use more width */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .scoreboard {
@@ -517,14 +647,19 @@ body {
 
 .scoreboard th,
 .scoreboard td {
-    padding: 0.5rem;
+    padding: 0;
+    /* Zero padding */
     text-align: center;
     border: 1px solid var(--border-color);
+    font-size: 0.7rem;
+    /* Tiny font */
+    line-height: 1.2;
 }
 
 .scoreboard th {
     background: var(--bg-dark);
-    font-size: 0.875rem;
+    font-size: 0.7rem;
+    /* Smaller header font */
     font-weight: 500;
     color: var(--text-secondary);
 }
@@ -549,7 +684,9 @@ body {
 .frame-cell {
     display: flex;
     flex-direction: column;
-    min-height: 60px;
+    min-height: 30px;
+    /* Reduced min-height further */
+    justify-content: center;
 }
 
 .frame-throws {
@@ -606,6 +743,9 @@ body {
 .correction-area {
     display: flex;
     justify-content: flex-end;
+    flex-shrink: 0;
+    margin-bottom: 0.25rem;
+    padding-right: 0.5rem;
 }
 
 /* ==========================================
@@ -625,8 +765,15 @@ body {
 }
 
 @keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
 }
 
 .results-container h2 {
@@ -751,19 +898,39 @@ body {
 }
 
 @keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 /* ==========================================
    Responsive Design
    ========================================== */
 
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
     .registration-container {
-        grid-template-columns: 1fr;
+        /* On very small screens (tablets/phones), stack */
+        flex-direction: column;
     }
-    
+
+    .registration-panel {
+        width: 100%;
+        height: auto;
+        overflow-y: visible;
+    }
+
+    .video-container {
+        flex: 0 0 auto;
+        height: 40vh;
+        /* Fixed height for video on small screens */
+    }
+
     .player-crop-container {
         width: 30%;
     }
@@ -773,20 +940,20 @@ body {
     .header {
         padding: 1rem;
     }
-    
+
     .screen {
         padding: 1rem;
     }
-    
+
     .game-info-bar {
         flex-wrap: wrap;
         gap: 1rem;
     }
-    
+
     .player-crop-container {
         width: 40%;
     }
-    
+
     .scoreboard {
         font-size: 0.75rem;
     }

@@ -114,14 +114,13 @@ class Player:
         num_frames = len(self.frames)
         for i, frame in enumerate(self.frames):
             is_last = (i == num_frames - 1)
-            # Only treat as "tenth frame" if it's the last frame AND we have 10 frames
-            is_tenth = is_last and num_frames == 10
-            if not frame.is_complete(is_tenth):
+            # Treat the last frame as special (allow 3 throws if strike/spare)
+            if not frame.is_complete(is_last):
                 return i
         return num_frames - 1  # All frames complete
     
     def get_current_throw(self) -> int:
-        """Get which throw we're on (1, 2, or 3 for 10th frame)"""
+        """Get which throw we're on (1, 2, or 3 for final frame)"""
         frame_idx = self.get_current_frame_index()
         frame = self.frames[frame_idx]
         
@@ -146,9 +145,8 @@ class Player:
                 continue
             
             is_last = (i == num_frames - 1)
-            is_tenth = is_last and num_frames == 10
             
-            if is_tenth:  # 10th frame (only when playing full 10 frames)
+            if is_last:  # Final frame
                 if frame.is_complete(is_tenth_frame=True):
                     frame_score = frame.pins_knocked()
                     cumulative += frame_score
@@ -195,8 +193,8 @@ class Player:
                 throws.append(frame.throw2)
             if len(throws) >= count:
                 break
-            # Only include throw3 if this is the 10th frame of a 10-frame game
-            if i == 9 and num_frames == 10 and frame.throw3 is not None:
+            # Only include throw3 if this is the final frame
+            if i == num_frames - 1 and frame.throw3 is not None:
                 throws.append(frame.throw3)
             if len(throws) >= count:
                 break
@@ -233,7 +231,7 @@ class GameManager:
     """
     
     def __init__(self, num_frames: int = 10, num_bottles: int = 10):
-        self.num_frames = min(10, max(1, num_frames))  # 1-10 frames
+        self.num_frames = min(20, max(1, num_frames))  # 1-20 frames
         self.num_bottles = max(1, num_bottles)  # At least 1 bottle
         self.state = GameState.SETTINGS
         self.players: List[Player] = []
@@ -255,7 +253,7 @@ class GameManager:
     def set_settings(self, com_port: str, num_frames: int, num_bottles: int = 10) -> None:
         """Set game settings"""
         self.com_port = com_port
-        self.num_frames = min(10, max(1, num_frames))
+        self.num_frames = min(20, max(1, num_frames))
         self.num_bottles = max(1, num_bottles)
         self.standing_bottles_before_throw = self.num_bottles
     
@@ -268,10 +266,10 @@ class GameManager:
         
         # Create player with the configured number of frames
         player = Player(name=name)
-        # Adjust frames if not playing full 10
-        if self.num_frames < 10:
-            player.frames = [Frame() for _ in range(self.num_frames)]
-            player.scores = [None] * self.num_frames
+        # Adjust frames if not playing full 10 (or if >10)
+        # Always re-init frames to match current settings
+        player.frames = [Frame() for _ in range(self.num_frames)]
+        player.scores = [None] * self.num_frames
         
         self.players.append(player)
         self.registered_player_names.append(name)
@@ -312,7 +310,8 @@ class GameManager:
         """Called when a throw sequence begins"""
         self.state = GameState.TRACKING_PLAYER
         self.tracking_target = "person"
-        self.standing_bottles_before_throw = self.num_bottles
+        # Do NOT reset standing_bottles_before_throw here. 
+        # It is set correctly by start_game, reset_game, and record_throw (for next player/throw).
     
     def on_ball_detected(self) -> None:
         """Called when the ball is detected (leaving player's hand)"""
@@ -356,12 +355,12 @@ class GameManager:
             return {"error": "No current player"}
         
         pins_knocked = self.standing_bottles_before_throw - standing_bottles
-        pins_knocked = max(0, min(10, pins_knocked))  # Clamp to valid range
+        pins_knocked = max(0, min(self.num_bottles, pins_knocked))  # Clamp to valid range
         
         frame_idx = player.get_current_frame_index()
         frame = player.frames[frame_idx]
         throw_num = player.get_current_throw()
-        is_tenth = (frame_idx == self.num_frames - 1)
+        is_last_frame = (frame_idx == self.num_frames - 1)
         
         # Record the throw
         if throw_num == 1:
@@ -390,12 +389,12 @@ class GameManager:
             "pins_knocked": pins_knocked,
             "is_strike": throw_num == 1 and pins_knocked == self.num_bottles,
             "is_spare": throw_num == 2 and frame.is_spare(),
-            "frame_complete": frame.is_complete(is_tenth),
+            "frame_complete": frame.is_complete(is_last_frame),
             "total_score": player.get_total_score(),
         }
         
         # Handle next state
-        if frame.is_complete(is_tenth):
+        if frame.is_complete(is_last_frame):
             # Frame complete, check if game over or switch player
             if self._check_game_over():
                 self.state = GameState.GAME_OVER
@@ -406,11 +405,11 @@ class GameManager:
                 self.state = GameState.WAITING_FOR_THROW
         else:
             # Same player, next throw
-            if is_tenth:
-                # In 10th frame, reset pins after strike
+            if is_last_frame:
+                # In final frame, reset pins after strike
                 if throw_num == 1 and pins_knocked == self.num_bottles:
                     self.standing_bottles_before_throw = self.num_bottles
-                elif throw_num == 2 and frame.throw1 + frame.throw2 >= self.num_bottles:
+                elif throw_num == 2 and (frame.throw1 or 0) + (frame.throw2 or 0) >= self.num_bottles:
                     self.standing_bottles_before_throw = self.num_bottles
                 else:
                     self.standing_bottles_before_throw = standing_bottles
@@ -469,8 +468,8 @@ class GameManager:
         # Game is over when both players complete all their frames
         for player in self.players:
             last_frame_idx = self.num_frames - 1
-            is_tenth = (last_frame_idx == 9)
-            if not player.frames[last_frame_idx].is_complete(is_tenth):
+            is_last = (last_frame_idx == len(player.frames) - 1)
+            if not player.frames[last_frame_idx].is_complete(is_last):
                 return False
         return True
     
@@ -492,12 +491,12 @@ class GameManager:
         for player in self.players:
             frames_data = []
             for i, frame in enumerate(player.frames):
-                is_tenth = (i == self.num_frames - 1 and self.num_frames == 10)
-                display = frame.get_display(is_tenth)
+                is_last_frame = (i == self.num_frames - 1)
+                display = frame.get_display(is_last_frame)
                 frames_data.append({
                     "throw1": display[0],
                     "throw2": display[1],
-                    "throw3": display[2] if is_tenth else None,
+                    "throw3": display[2] if is_last_frame else None,
                     "score": player.scores[i],
                     "is_strike": frame.is_strike(),
                     "is_spare": frame.is_spare()

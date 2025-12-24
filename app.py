@@ -468,12 +468,12 @@ def track_ball(frame, results):
     # Transition conditions:
     # 1. Ball lost AND bottles visible
     # 2. Ball lost for too long
-    if app_state.ball_lost_count >= app_state.BALL_LOST_THRESHOLD:
-        if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
-            gm.on_bottles_visible()
-            app_state.counting_start_time = time.time()
-            socketio.emit('tracking_status', {'target': 'bottle', 'found': True})
-            socketio.emit('game_state', gm.get_game_state_dict())
+    # if app_state.ball_lost_count >= app_state.BALL_LOST_THRESHOLD:
+    if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
+        gm.on_bottles_visible()
+        app_state.counting_start_time = time.time()
+        socketio.emit('tracking_status', {'target': 'bottle', 'found': True})
+        socketio.emit('game_state', gm.get_game_state_dict())
     
     return frame
 
@@ -574,8 +574,20 @@ def emit_frame(frame):
 def emit_player_crop(crop, player_name):
     """Encode and emit player crop to clients"""
     try:
-        # Resize crop
-        crop_resized = cv2.resize(crop, (150, 200))
+        # Resize crop maintaining aspect ratio
+        h, w = crop.shape[:2]
+        target_size = 200
+        
+        if h > target_size or w > target_size:
+            if h > w:
+                new_h = target_size
+                new_w = int(w * (target_size / h))
+            else:
+                new_w = target_size
+                new_h = int(h * (target_size / w))
+            crop_resized = cv2.resize(crop, (new_w, new_h))
+        else:
+            crop_resized = crop
         
         _, buffer = cv2.imencode('.jpg', crop_resized, [cv2.IMWRITE_JPEG_QUALITY, 70])
         crop_base64 = base64.b64encode(buffer).decode('utf-8')

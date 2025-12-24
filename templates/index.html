@@ -66,7 +66,7 @@
                 </div>
                 <div class="form-group">
                     <label for="numFrames">Number of Frames: <span id="framesValue">10</span></label>
-                    <input type="range" id="numFrames" min="1" max="10" value="10">
+                    <input type="range" id="numFrames" min="1" max="20" value="10">
                 </div>
                 <button class="btn btn-primary btn-large" id="startSetupBtn">
                     Start Setup →
@@ -107,27 +107,27 @@
         <!-- Game Screen -->
         <section id="gameScreen" class="screen">
             <div class="game-container">
-                <!-- Main Video Area -->
-                <div class="main-video-area">
-                    <img id="gameVideoFeed" class="video-feed" alt="Camera Feed">
+                <!-- Scoreboard -->
+                <div class="scoreboard-container">
+                    <table class="scoreboard">
+                        <thead>
+                            <tr id="scoreboardHeaderRow">
+                                <th class="player-name-col">Player</th>
+                                <!-- Frame headers will be inserted here dynamically -->
+                                <th class="total-col">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scoreboardBody">
+                            <!-- Player rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
 
-                    <!-- Player Crop Overlay -->
-                    <div class="player-crop-container" id="playerCropContainer">
-                        <div class="player-crop-header">
-                            <span id="cropPlayerName">Current Player</span>
-                        </div>
-                        <img id="playerCropFeed" class="player-crop-feed" alt="Player Crop">
-                    </div>
-
-                    <!-- Tracking Status Overlay -->
-                    <div class="tracking-overlay" id="trackingOverlay">
-                        <span class="tracking-target" id="trackingTarget">Tracking: Player</span>
-                    </div>
-
-                    <!-- Countdown Overlay -->
-                    <div class="countdown-overlay" id="countdownOverlay" style="display: none;">
-                        <span id="countdownNumber">3</span>
-                    </div>
+                <!-- Score Correction Button (Moved here) -->
+                <div class="correction-area">
+                    <button class="btn btn-outline" id="correctScoreBtn">
+                        ✏️ Correct Last Score
+                    </button>
                 </div>
 
                 <!-- Game Info Bar -->
@@ -150,36 +150,27 @@
                     </div>
                 </div>
 
-                <!-- Scoreboard -->
-                <div class="scoreboard-container">
-                    <table class="scoreboard">
-                        <thead>
-                            <tr>
-                                <th class="player-name-col">Player</th>
-                                <th>1</th>
-                                <th>2</th>
-                                <th>3</th>
-                                <th>4</th>
-                                <th>5</th>
-                                <th>6</th>
-                                <th>7</th>
-                                <th>8</th>
-                                <th>9</th>
-                                <th class="frame-10">10</th>
-                                <th class="total-col">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="scoreboardBody">
-                            <!-- Player rows will be inserted here -->
-                        </tbody>
-                    </table>
-                </div>
+                <!-- Main Video Area -->
+                <div class="main-video-area">
+                    <img id="gameVideoFeed" class="video-feed" alt="Camera Feed">
 
-                <!-- Score Correction Button -->
-                <div class="correction-area">
-                    <button class="btn btn-outline" id="correctScoreBtn">
-                        ✏️ Correct Last Score
-                    </button>
+                    <!-- Player Crop Overlay -->
+                    <div class="player-crop-container" id="playerCropContainer">
+                        <div class="player-crop-header">
+                            <span id="cropPlayerName">Current Player</span>
+                        </div>
+                        <img id="playerCropFeed" class="player-crop-feed" alt="Player Crop">
+                    </div>
+
+                    <!-- Tracking Status Overlay -->
+                    <div class="tracking-overlay" id="trackingOverlay">
+                        <span class="tracking-target" id="trackingTarget">Tracking: Player</span>
+                    </div>
+
+                    <!-- Countdown Overlay -->
+                    <div class="countdown-overlay" id="countdownOverlay" style="display: none;">
+                        <span id="countdownNumber">3</span>
+                    </div>
                 </div>
             </div>
         </section>
