@@ -52,3 +52,4 @@ runs/
 *.pt
 !yolo11n.pt
 !best.pt
+!merged_v2.pt
