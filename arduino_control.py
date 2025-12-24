@@ -14,6 +14,7 @@ Author: AI Intro Final Project
 Date: 2024-12
 """
 
+import numpy as np
 import serial
 import time
 from yolo_detection import YOLODetector
@@ -49,20 +50,18 @@ class CameraTracker:
         # State management for tilt servo (absolute position)
         self.current_tilt_angle = 90  # Start at center position (0-180)
         
-        # Dead zone settings (as proportion of frame size) - motor stops when within this range
-        self.dead_zone_ratio_x = 0.05  # 5% of frame width
-        self.dead_zone_ratio_y = 0.05  # 5% of frame height
-        self.dead_zone_x = int(frame_width * self.dead_zone_ratio_x)
-        self.dead_zone_y = int(frame_height * self.dead_zone_ratio_y)
+        # Dead zone settings (as ratio, error is normalized to -1 ~ 1)
+        self.dead_zone_x = 0.08  # 8% from center
+        self.dead_zone_y = 0.08   # 8% from center
         
         # Speed/angle adjustment settings
-        self.pan_speed_factor = 0.2   # How much error affects pan speed
-        self.tilt_step = 1            # Degrees to move per frame for tilt
-        self.max_pan_deviation = 80   # Max deviation from 90 (stop) for pan speed
+        self.max_pan_deviation = 90   # Max deviation from 90 (stop) for pan speed
+        self.pan_speed_factor = self.max_pan_deviation - 35   # org:35. How much error affects pan speed (for sqrt curve)
+        self.tilt_step = 3        # Degrees to move per frame for tilt
         
         # Tilt limits
-        self.tilt_min = 30   # Minimum tilt angle (looking up)
-        self.tilt_max = 150  # Maximum tilt angle (looking down)
+        self.tilt_min = 0   # Minimum tilt angle (looking up)
+        self.tilt_max = 115  # Maximum tilt angle (looking down)
         
         # Serial connection
         self.arduino = None
@@ -70,7 +69,7 @@ class CameraTracker:
         
         # Rate limiting - don't send commands too fast
         self.last_command_time = 0
-        self.min_command_interval = 0.05  # 50ms between commands (20 Hz max)
+        self.min_command_interval = 0.033  # 33ms between commands (30 Hz max)
         
         # Last sent values - avoid sending same command repeatedly
         self.last_pan_speed = 90
@@ -199,20 +198,20 @@ class CameraTracker:
             print(f"Error sending command: {e}")
             return False
     
-    def _calculate_pan_speed(self, error_x):
+    def _calculate_pan_speed(self, error_x, is_tennis):
         """
         Calculate pan motor speed based on horizontal error.
-        
+
         For continuous rotation servo:
         - 90 = Stop
         - < 90 = Rotate left (CCW)
         - > 90 = Rotate right (CW)
-        
+
         Args:
-            error_x (int): Horizontal error (frame_center_x - object_x)
-                          Positive = object is to the left
-                          Negative = object is to the right
-        
+            error_x (float): Normalized horizontal error (-1 to 1)
+                            Positive = object is to the left
+                            Negative = object is to the right
+
         Returns:
             int: Pan speed value (0-180)
         """
@@ -220,32 +219,47 @@ class CameraTracker:
         if abs(error_x) < self.dead_zone_x:
             return 90  # Stop
         
-        # Map error to speed deviation
-        # Larger error = faster rotation
-        speed_deviation = error_x * self.pan_speed_factor
+        # Map error to speed deviation using sqrt for log-like response
+        # Near center: more linear (responsive)
+        # Far from center: slower growth (prevents overshooting)
+        # sign = 1 if error_x >= 0 else -1
+        # abs_error = abs(error_x)*
+
+        if is_tennis:
+            # speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
+            speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x) * self.pan_speed_factor
+        else:
+            speed_deviation = np.tanh(error_x) * self.pan_speed_factor
         
         # Constrain deviation
         speed_deviation = max(-self.max_pan_deviation, 
                              min(self.max_pan_deviation, speed_deviation))
-        
+        # if abs(speed_deviation) < 22:
+        #     speed_deviation = (np.sign(speed_deviation) or 1) * 22  # or 1 處理 0 的情況
+        # if speed_deviation > 0:
+        #     pan_speed = 100 + speed_deviation
+        # else:
+        #     pan_speed = 80 + speed_deviation
         # Calculate final speed (centered at 90)
         # Positive error (object left) -> speed > 90 (rotate left to track)
         # Negative error (object right) -> speed < 90 (rotate right to track)
         pan_speed = 90 + speed_deviation
+        # print(f"Pan Speed Calculation: error_x={error_x:.3f}, speed_deviation={speed_deviation:.2f}, pan_speed={pan_speed:.2f}")
         
         return int(pan_speed)
+
     
     def _calculate_tilt_angle(self, error_y):
         """
         Calculate new tilt angle based on vertical error.
-        
+
         Uses incremental updates to smoothly track objects.
-        
+
         Args:
-            error_y (int): Vertical error (frame_center_y - object_y)
-                          Positive = object is above center
-                          Negative = object is below center
-        
+            error_y (float): Normalized vertical error (-1 to 1)
+                            Positive = object is above center
+                            Negative = object is below center
+
         Returns:
             int: New tilt angle (constrained to tilt_min - tilt_max)
         """
@@ -263,7 +277,8 @@ class CameraTracker:
         
         # Constrain to limits
         new_angle = max(self.tilt_min, min(self.tilt_max, new_angle))
-        
+        # debug
+        # print(f"New Tilt Angle: {new_angle}")
         return int(new_angle)
     
     def camera_track(self, frame, target_label):
@@ -315,15 +330,22 @@ class CameraTracker:
         x1, y1, x2, y2 = map(int, target_box)
         cx = (x1 + x2) // 2
         cy = (y1 + y2) // 2
-        
-        # Calculate errors (distance from frame center to object center)
-        error_x = self.frame_center_x - cx  # Positive = object is left
-        error_y = self.frame_center_y - cy  # Positive = object is above
-        
+
+        # Calculate normalized errors (-1 to 1, distance from frame center to object center)
+        # Divide by half frame size to normalize
+        error_x = (self.frame_center_x - cx) / self.frame_center_x  # Positive = object is left
+        error_y = (self.frame_center_y - cy) / self.frame_center_y  # Positive = object is above
+        # print("Error X:", error_x)
+        # print("Error Y:", error_y)
         # Calculate motor commands
-        pan_speed = self._calculate_pan_speed(error_x)
+        is_tennis = False   
+        if target_label == "tennis_ball":
+            is_tennis = True
+
+        pan_speed = self._calculate_pan_speed(error_x, is_tennis)
         new_tilt_angle = self._calculate_tilt_angle(error_y)
-        
+        # print("Pan Speed:", pan_speed)
+        # print("New Tilt Angle:", new_tilt_angle)
         # Update state
         self.current_tilt_angle = new_tilt_angle
         
@@ -347,9 +369,6 @@ class CameraTracker:
         self.frame_height = height
         self.frame_center_x = width // 2
         self.frame_center_y = height // 2
-        # Recalculate dead zones based on new frame size
-        self.dead_zone_x = int(width * self.dead_zone_ratio_x)
-        self.dead_zone_y = int(height * self.dead_zone_ratio_y)
 
 
 # Global tracker instance for simple function-based usage
@@ -463,7 +482,7 @@ if __name__ == "__main__":
             cv2.putText(frame, info_text, (10, 30), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             
-            error_text = f"Error: ({result['error'][0]}, {result['error'][1]})"
+            error_text = f"Error: ({result['error'][0]:.2f}, {result['error'][1]:.2f})"
             cv2.putText(frame, error_text, (10, 60),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         else:
