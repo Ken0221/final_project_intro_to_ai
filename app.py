@@ -428,8 +428,99 @@ def track_player_greedy(frame, results, target_player_name):
     # Get person crops
     persons = app_state.yolo.get_person_crops(frame, results)
     
-    # ... (rest of function) ...
+    # 1. Collect all potential matches
+    candidates = [] # [(score, person_idx, player_name), ...]
+    person_data = [] # Stores (box, scores_dict) for rendering
+    
+    ID_THRESHOLD = 0.55
+    
+    for idx, (person_img, (x1, y1, x2, y2)) in enumerate(persons):
+        _, _, scores_dict = app_state.reid.identify_player(person_img, threshold=ID_THRESHOLD)
+        person_data.append(((x1, y1, x2, y2), scores_dict))
+        
+        if scores_dict:
+            for p_name, p_vals in scores_dict.items():
+                s = p_vals['combined']
+                if s > ID_THRESHOLD:
+                    candidates.append((s, idx, p_name))
+    
+    # 2. Global Greedy Matching
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    assigned_persons = set()
+    assigned_players = set()
+    final_assignments = {} # person_idx -> (name, score)
+    
+    for score, p_idx, p_name in candidates:
+        if p_idx in assigned_persons or p_name in assigned_players:
+            continue
+        
+        final_assignments[p_idx] = (p_name, score)
+        assigned_persons.add(p_idx)
+        assigned_players.add(p_name)
+    
+    # 3. Find target player and visualize
+    target_box = None
+    
+    for idx, (box_coords, scores_dict) in enumerate(person_data):
+        x1, y1, x2, y2 = box_coords
+        
+        display_name = "Unknown"
+        score = 0.0
+        color = (0, 0, 255) # Red for unknown
+        
+        if idx in final_assignments:
+            name, s = final_assignments[idx]
+            display_name = name
+            score = s
+            color = (255, 0, 255) # Magenta for identified
+            
+            # Use 'target_player_name' to decide gimbal tracking
+            if name == target_player_name:
+                 target_box = (x1, y1, x2, y2)
+                 app_state.current_player_crop = persons[idx][0]
+        
+        # Draw on frame
+        # Only draw if:
+        # 1. Debug mode is ON
+        # 2. Identified as target player
+        # 3. Only one person in view (Assume it's the player)
+        if app_state.debug_mode or display_name == target_player_name or len(persons) == 1:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, f"{display_name} ({score:.2f})", (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        
+        # Debug Info
+        if app_state.debug_mode and scores_dict:
+             y_offset = y1 + 20
+             for p_name, p_scores in scores_dict.items():
+                 debug_text = f"{p_name}: {p_scores['combined']:.2f}"
+                 cv2.putText(frame, debug_text, (x1, y_offset), 
+                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                 y_offset += 18
+    
+    # 4. Control Gimbal if target found
+    if target_box and app_state.tracker and app_state.tracker.connected:
+        cx = (target_box[0] + target_box[2]) // 2
+        cy = (target_box[1] + target_box[3]) // 2
+        
+        error_x = (app_state.tracker.frame_center_x - cx) / app_state.tracker.frame_center_x
+        error_y = (app_state.tracker.frame_center_y - cy) / app_state.tracker.frame_center_y
+        
+        pan_speed = app_state.tracker._calculate_pan_speed(error_x, is_tennis=False)
+        new_tilt_angle = app_state.tracker._calculate_tilt_angle(error_y)
+        
+        app_state.tracker.current_tilt_angle = new_tilt_angle
+        app_state.tracker._send_command(pan_speed, new_tilt_angle)
+        
+        # Emit crop
+        if app_state.current_player_crop is not None:
+             emit_player_crop(app_state.current_player_crop, target_player_name)
 
+    elif app_state.tracker and app_state.tracker.connected:
+        # Target lost/not found this frame
+        app_state.tracker._send_command(90, app_state.tracker.current_tilt_angle)
+    
     # 5. Check for ball (Transition logic)
     all_objects = app_state.yolo.get_everything_attr(results)
     
