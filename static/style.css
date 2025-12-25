@@ -957,4 +957,58 @@ body {
     .scoreboard {
         font-size: 0.75rem;
     }
+}/* Registration Actions */
+.capture-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.capture-buttons .btn-sm {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.capture-buttons .btn-sm:hover {
+    border-color: var(--primary);
+    color: var(--text-primary);
+}
+
+.capture-buttons .btn-captured {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.angle-status {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.angle-status .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+    animation: none;
+    /* Reset global pulse */
+}
+
+.angle-status .status-dot.pending {
+    background: var(--bg-dark);
+    border-color: var(--text-muted);
+}
+
+.angle-status .status-dot.captured {
+    background: var(--success);
+    border-color: var(--success);
+    box-shadow: 0 0 5px var(--success);
 }

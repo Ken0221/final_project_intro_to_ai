@@ -87,18 +87,61 @@
                 </div>
                 <div class="registration-panel">
                     <h2>👥 Player Registration</h2>
+
+                    <!-- Player 1 -->
                     <div class="player-reg-card" id="player1Card">
                         <div class="player-number">Player 1</div>
                         <input type="text" id="player1Name" placeholder="Enter name...">
-                        <button class="btn btn-secondary" id="regPlayer1Btn">📷 Capture & Register</button>
+
+                        <div class="capture-buttons">
+                            <button class="btn btn-sm" id="p1FrontBtn" onclick="captureAngle('player1', 'front')">📷
+                                Front</button>
+                            <button class="btn btn-sm" id="p1BackBtn" onclick="captureAngle('player1', 'back')">📷
+                                Back</button>
+                            <button class="btn btn-sm" id="p1LeftBtn" onclick="captureAngle('player1', 'left')">📷
+                                Left</button>
+                            <button class="btn btn-sm" id="p1RightBtn" onclick="captureAngle('player1', 'right')">📷
+                                Right</button>
+                        </div>
+
+                        <div class="angle-status" id="p1AngleStatus">
+                            <span id="p1frontStatus" class="status-dot pending" title="Front"></span>
+                            <span id="p1backStatus" class="status-dot pending" title="Back"></span>
+                            <span id="p1leftStatus" class="status-dot pending" title="Left"></span>
+                            <span id="p1rightStatus" class="status-dot pending" title="Right"></span>
+                        </div>
+
+                        <button class="btn btn-secondary" id="regPlayer1Btn" disabled>✅ Finalize Player 1</button>
                         <div class="player-status" id="player1Status"></div>
                     </div>
+
+                    <!-- Player 2 -->
                     <div class="player-reg-card" id="player2Card">
                         <div class="player-number">Player 2</div>
                         <input type="text" id="player2Name" placeholder="Enter name...">
-                        <button class="btn btn-secondary" id="regPlayer2Btn">📷 Capture & Register</button>
+
+                        <div class="capture-buttons">
+                            <button class="btn btn-sm" id="p2FrontBtn" onclick="captureAngle('player2', 'front')">📷
+                                Front</button>
+                            <button class="btn btn-sm" id="p2BackBtn" onclick="captureAngle('player2', 'back')">📷
+                                Back</button>
+                            <button class="btn btn-sm" id="p2LeftBtn" onclick="captureAngle('player2', 'left')">📷
+                                Left</button>
+                            <button class="btn btn-sm" id="p2RightBtn" onclick="captureAngle('player2', 'right')">📷
+                                Right</button>
+                        </div>
+
+                        <div class="angle-status" id="p2AngleStatus">
+                            <span id="p2frontStatus" class="status-dot pending" title="Front"></span>
+                            <span id="p2backStatus" class="status-dot pending" title="Back"></span>
+                            <span id="p2leftStatus" class="status-dot pending" title="Left"></span>
+                            <span id="p2rightStatus" class="status-dot pending" title="Right"></span>
+                        </div>
+
+                        <button class="btn btn-secondary" id="regPlayer2Btn" disabled>✅ Finalize Player 2</button>
                         <div class="player-status" id="player2Status"></div>
                     </div>
+
                     <button class="btn btn-primary btn-large" id="startGameBtn" disabled>
                         🎳 Start Game
                     </button>

@@ -74,6 +74,10 @@ class AppState:
         self.BALL_DETECT_THRESHOLD = 3  # Frames to confirm ball detected
         self.BALL_LOST_THRESHOLD = 10   # Frames to confirm ball lost
         self.BOTTLE_DETECT_THRESHOLD = 5  # Frames to confirm bottles visible
+        
+        # Debug & Registration State
+        self.debug_mode = False
+        self.pending_registrations = {}  # {player_num: [crop1, crop2, ...]}
 
 app_state = AppState()
 
@@ -129,21 +133,19 @@ def handle_settings(data):
     emit('game_state', app_state.game_manager.get_game_state_dict())
     print(f"Settings: COM={app_state.com_port}, Bottles={num_bottles}, YOLO={app_state.yolo_model}")
 
-@socketio.on('register_player')
-def handle_register_player(data):
-    """Register a player"""
-    player_num = data.get('player_num')
-    name = data.get('name', '').strip()
+@socketio.on('register_capture')
+def handle_register_capture(data):
+    """Capture a single angle for registration"""
+    player_num = data.get('player_num')  # e.g., 'player1'
+    angle = data.get('angle')            # 'front', 'back', 'left', 'right'
     
-    if not name:
-        emit('registration_result', {'success': False, 'message': 'Name is required'})
+    if not player_num or not angle:
         return
-    
-    # Capture current frame for registration
+
     if app_state.current_frame is not None:
         frame = app_state.current_frame.copy()
         
-        # Detect persons
+        # Detect person
         results = app_state.yolo.detect(frame, conf=app_state.conf, iou=app_state.iou)
         persons = app_state.yolo.get_person_crops(frame, results)
         
@@ -158,28 +160,63 @@ def handle_register_player(data):
                     best_crop = crop
             
             if best_crop is not None:
-                # Register with ReID
-                app_state.reid.register_player_from_samples(name, [best_crop])
+                # Initialize list if needed
+                if player_num not in app_state.pending_registrations:
+                    app_state.pending_registrations[player_num] = []
                 
-                # Register in game manager
-                if app_state.game_manager.register_player(name):
-                    emit('registration_result', {
-                        'success': True,
-                        'player_num': player_num,
-                        'name': name
-                    })
-                    emit('game_state', app_state.game_manager.get_game_state_dict())
-                    return
+                # Store crop
+                app_state.pending_registrations[player_num].append(best_crop)
+                
+                emit('capture_result', {
+                    'success': True,
+                    'player_num': player_num,
+                    'angle': angle
+                })
+                return
         
-        emit('registration_result', {
+        emit('capture_result', {
             'success': False,
-            'message': 'No person detected. Please stand in front of the camera.'
+            'player_num': player_num,
+            'message': 'No person detected'
         })
     else:
-        emit('registration_result', {
+        emit('capture_result', {
             'success': False,
+             'player_num': player_num,
             'message': 'Camera not ready'
         })
+
+@socketio.on('finalize_registration')
+def handle_finalize_registration(data):
+    """Finalize registration after all angles captured"""
+    player_num = data.get('player_num')
+    name = data.get('name', '').strip()
+    
+    if not name:
+        emit('registration_result', {'success': False, 'message': 'Name is required'})
+        return
+        
+    crops = app_state.pending_registrations.get(player_num, [])
+    if not crops:
+        emit('registration_result', {'success': False, 'message': 'No samples captured'})
+        return
+
+    # Register with ReID
+    app_state.reid.register_player_from_samples(name, crops)
+    
+    # Register in game manager
+    if app_state.game_manager.register_player(name):
+        # Clear pending
+        del app_state.pending_registrations[player_num]
+        
+        emit('registration_result', {
+            'success': True,
+            'player_num': player_num,
+            'name': name
+        })
+        emit('game_state', app_state.game_manager.get_game_state_dict())
+    else:
+        emit('registration_result', {'success': False, 'message': 'Registration failed'})
 
 @socketio.on('start_game')
 def handle_start_game():
@@ -344,6 +381,11 @@ def process_registration_frame(frame):
         cv2.putText(frame, "Person Detected", (x1, y1 - 10),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
     
+    # Show debug info if enabled
+    if app_state.debug_mode:
+        cv2.putText(frame, "[DEBUG MODE]", (20, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    
     return frame
 
 def process_game_frame(frame):
@@ -366,7 +408,7 @@ def process_game_frame(frame):
         socketio.emit('tracking_status', {'target': 'person', 'found': False})
     
     if gm.state == GameState.TRACKING_PLAYER:
-        frame = track_player(frame, results, current_player.name)
+        frame = track_player_greedy(frame, results, current_player.name)
     
     elif gm.state == GameState.TRACKING_BALL:
         frame = track_ball(frame, results)
@@ -379,56 +421,104 @@ def process_game_frame(frame):
     
     return frame
 
-def track_player(frame, results, player_name):
-    """Track the current player"""
-    gm = app_state.game_manager
+def track_player_greedy(frame, results, target_player_name):
+    """Track player using Global Greedy Matching"""
     
-    # Get person crops and identify player
+    # Get person crops
     persons = app_state.yolo.get_person_crops(frame, results)
     
-    target_box = None
-    for crop, (x1, y1, x2, y2) in persons:
-        identified, score, _ = app_state.reid.identify_player(crop, threshold=0.5)
-        
-        # if identified == player_name:
-        if True:
-            target_box = (x1, y1, x2, y2)
-            app_state.current_player_crop = crop
-            
-            # Draw player box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
-            cv2.putText(frame, f"{player_name} ({score:.2f})", (x1, y1 - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2)
-            break
+    # 1. Collect all potential matches
+    candidates = [] # [(score, person_idx, player_name), ...]
+    person_data = [] # Stores (box, scores_dict) for rendering
     
-    # Track player with gimbal
+    ID_THRESHOLD = 0.55
+    
+    for idx, (person_img, (x1, y1, x2, y2)) in enumerate(persons):
+        _, _, scores_dict = app_state.reid.identify_player(person_img, threshold=ID_THRESHOLD)
+        person_data.append(((x1, y1, x2, y2), scores_dict))
+        
+        if scores_dict:
+            for p_name, p_vals in scores_dict.items():
+                s = p_vals['combined']
+                if s > ID_THRESHOLD:
+                    candidates.append((s, idx, p_name))
+    
+    # 2. Global Greedy Matching
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    assigned_persons = set()
+    assigned_players = set()
+    final_assignments = {} # person_idx -> (name, score)
+    
+    for score, p_idx, p_name in candidates:
+        if p_idx in assigned_persons or p_name in assigned_players:
+            continue
+        
+        final_assignments[p_idx] = (p_name, score)
+        assigned_persons.add(p_idx)
+        assigned_players.add(p_name)
+    
+    # 3. Find target player and visualize
+    target_box = None
+    
+    for idx, (box_coords, scores_dict) in enumerate(person_data):
+        x1, y1, x2, y2 = box_coords
+        
+        display_name = "Unknown"
+        score = 0.0
+        color = (0, 0, 255) # Red for unknown
+        
+        if idx in final_assignments:
+            name, s = final_assignments[idx]
+            display_name = name
+            score = s
+            color = (255, 0, 255) # Magenta for identified
+            
+            # Use 'target_player_name' to decide gimbal tracking
+            # But we also want to display ALL identified names
+            if name == target_player_name:
+                 target_box = (x1, y1, x2, y2)
+                 app_state.current_player_crop = persons[idx][0]
+        
+        # Draw on frame
+        # Only draw if debug_mode is active OR this is the target player
+        if app_state.debug_mode or display_name == target_player_name:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, f"{display_name} ({score:.2f})", (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        
+        # Debug Info
+        if app_state.debug_mode and scores_dict:
+             y_offset = y1 + 20
+             for p_name, p_scores in scores_dict.items():
+                 debug_text = f"{p_name}: {p_scores['combined']:.2f}"
+                 cv2.putText(frame, debug_text, (x1, y_offset), 
+                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                 y_offset += 18
+    
+    # 4. Control Gimbal if target found
     if target_box and app_state.tracker and app_state.tracker.connected:
         cx = (target_box[0] + target_box[2]) // 2
         cy = (target_box[1] + target_box[3]) // 2
         
-        # Calculate error and send to tracker
         error_x = (app_state.tracker.frame_center_x - cx) / app_state.tracker.frame_center_x
         error_y = (app_state.tracker.frame_center_y - cy) / app_state.tracker.frame_center_y
-        # print("Error X:", error_x)
-        # print("Error Y:", error_y)
+        
         pan_speed = app_state.tracker._calculate_pan_speed(error_x, is_tennis=False)
         new_tilt_angle = app_state.tracker._calculate_tilt_angle(error_y)
-        # print("Pan Speed:", pan_speed)
-        # print("New Tilt Angle:", new_tilt_angle)
-        # Update tracker state (critical for incremental tilt adjustment!)
-        app_state.tracker.current_tilt_angle = new_tilt_angle
         
-        # print(f"Pan Speed: {pan_speed}, Tilt Angle: {tilt_angle}")
+        app_state.tracker.current_tilt_angle = new_tilt_angle
         app_state.tracker._send_command(pan_speed, new_tilt_angle)
+        
+        # Emit crop
+        if app_state.current_player_crop is not None:
+             emit_player_crop(app_state.current_player_crop, target_player_name)
+
     elif app_state.tracker and app_state.tracker.connected:
-        # Target not found - stop pan motor, maintain tilt
+        # Target lost/not found this frame
         app_state.tracker._send_command(90, app_state.tracker.current_tilt_angle)
     
-    # Emit player crop
-    if app_state.current_player_crop is not None:
-        emit_player_crop(app_state.current_player_crop, player_name)
-    
-    # Check for ball - transition to TRACKING_BALL
+    # 5. Check for ball (Transition logic remains same)
     all_objects = app_state.yolo.get_everything_attr(results)
     ball_found = any(cls.lower() == 'tennisball' for cls, _, _ in all_objects)
     
@@ -621,15 +711,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bowling Scorer Web App')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--port', type=int, default=5001, help='Port to bind to')
-    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
+    parser.add_argument('--debug_reid', action='store_true', help='Enable ReID debug overlay')
     
     args = parser.parse_args()
+    
+    # Store debug arg in app state
+    app_state.debug_mode = args.debug_reid
     
     try:
         print("=" * 50)
         print("🎳 Bowling Scorer Web Application")
         print("=" * 50)
         print(f"Starting server on http://{args.host}:{args.port}")
+        print(f"ReID Debug Mode: {'ON' if args.debug_reid else 'OFF'}")
         print("Open a browser to access the application")
         print("=" * 50)
         
