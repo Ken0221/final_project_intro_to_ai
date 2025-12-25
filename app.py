@@ -423,7 +423,6 @@ def process_game_frame(frame):
 
 def track_player_greedy(frame, results, target_player_name):
     """Track player using Global Greedy Matching"""
-    gm = app_state.game_manager  # Fix: Define gm
     
     # Get person crops
     persons = app_state.yolo.get_person_crops(frame, results)
@@ -476,16 +475,14 @@ def track_player_greedy(frame, results, target_player_name):
             color = (255, 0, 255) # Magenta for identified
             
             # Use 'target_player_name' to decide gimbal tracking
+            # But we also want to display ALL identified names
             if name == target_player_name:
                  target_box = (x1, y1, x2, y2)
                  app_state.current_player_crop = persons[idx][0]
         
         # Draw on frame
-        # Only draw if:
-        # 1. Debug mode is ON
-        # 2. Identified as target player
-        # 3. Only one person in view (Assume it's the player)
-        if app_state.debug_mode or display_name == target_player_name or len(persons) == 1:
+        # Only draw if debug_mode is active OR this is the target player
+        if app_state.debug_mode or display_name == target_player_name:
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             cv2.putText(frame, f"{display_name} ({score:.2f})", (x1, y1 - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
@@ -521,30 +518,10 @@ def track_player_greedy(frame, results, target_player_name):
         # Target lost/not found this frame
         app_state.tracker._send_command(90, app_state.tracker.current_tilt_angle)
     
-    # 5. Check for ball (Transition logic)
+    # 5. Check for ball (Transition logic remains same)
     all_objects = app_state.yolo.get_everything_attr(results)
+    ball_found = any(cls.lower() == 'tennisball' for cls, _, _ in all_objects)
     
-    # More robust check for ball
-    # Matches: 'tennisball', 'tennis_ball', 'sports ball', 'ball'
-    ball_found = False
-    for cls, box, conf in all_objects:
-        clean_name = cls.lower().replace('_', '').replace(' ', '')
-        if clean_name in ['tennisball', 'sportsball', 'ball']:
-            ball_found = True
-            
-            # Draw ball (Always show ball to confirm detection)
-            x1, y1, x2, y2 = map(int, box)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2) # Orange for ball
-            cv2.putText(frame, "BALL", (x1, y1 - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
-
-        # General debug for other objects (Only in debug mode)
-        elif app_state.debug_mode and cls.lower() != 'person':
-             x1, y1, x2, y2 = map(int, box)
-             cv2.rectangle(frame, (x1, y1), (x2, y2), (200, 200, 200), 1)
-             cv2.putText(frame, f"{cls}", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-
     if ball_found:
         app_state.ball_visible_count += 1
         if app_state.ball_visible_count >= app_state.BALL_DETECT_THRESHOLD:
