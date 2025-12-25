@@ -16,7 +16,13 @@ const state = {
     gameState: null,
     lastThrowInfo: null,
     arduinoConnected: false,
-    numFrames: 0 // Track number of frames to rebuild header only when needed
+    numFrames: 0, // Track number of frames to rebuild header only when needed
+
+    // Track captured angles for each player
+    registrationState: {
+        1: { front: false, back: false, left: false, right: false },
+        2: { front: false, back: false, left: false, right: false }
+    }
 };
 
 // ==========================================
@@ -82,8 +88,14 @@ function initializeSocket() {
     });
 
     // Registration result
+    // Registration result (Finalize)
     state.socket.on('registration_result', (data) => {
         handleRegistrationResult(data);
+    });
+
+    // Capture result (Single Angle)
+    state.socket.on('capture_result', (data) => {
+        handleCaptureResult(data);
     });
 
     // Game over
@@ -104,8 +116,9 @@ function initializeEventListeners() {
     document.getElementById('settingsBtn').addEventListener('click', toggleSettings);
 
     // Registration screen
-    document.getElementById('regPlayer1Btn').addEventListener('click', () => registerPlayer(1));
-    document.getElementById('regPlayer2Btn').addEventListener('click', () => registerPlayer(2));
+    // Registration screen (buttons use inline onclick handlers)
+    // document.getElementById('regPlayer1Btn').addEventListener('click', () => registerPlayer(1));
+    // document.getElementById('regPlayer2Btn').addEventListener('click', () => registerPlayer(2));
     document.getElementById('startGameBtn').addEventListener('click', startGame);
 
     // Game screen
@@ -204,22 +217,91 @@ function startSetup() {
 // Registration Screen
 // ==========================================
 
-function registerPlayer(playerNum) {
-    const nameInput = document.getElementById(`player${playerNum}Name`);
-    const name = nameInput.value.trim();
-
+// Capture a single angle for a player
+function captureAngle(playerNum, angle) {
+    const name = document.getElementById(`player${playerNum}Name`).value.trim();
     if (!name) {
-        showToast('Please enter a player name', 'warning');
+        showToast('Please enter a name first', 'warning');
         return;
     }
 
-    // Send registration request
-    state.socket.emit('register_player', {
+    // Disable button while capturing
+    const btn = document.getElementById(`p${playerNum}${capitalize(angle)}Btn`);
+    if (btn) btn.disabled = true;
+
+    state.socket.emit('register_capture', {
+        player_num: playerNum,
+        angle: angle
+    });
+
+    showToast(`Capturing ${angle}...`, 'info');
+}
+
+// Finalize registration after capturing all angles
+function finalizeRegistration(playerNum) {
+    const name = document.getElementById(`player${playerNum}Name`).value.trim();
+    if (!name) {
+        showToast('Please enter a name', 'warning');
+        return;
+    }
+
+    state.socket.emit('finalize_registration', {
         player_num: playerNum,
         name: name
     });
 
-    showToast(`Capturing ${name}...`, 'info');
+    showToast(`Finalizing registration for ${name}...`, 'info');
+}
+
+// Handle capture result from server
+function handleCaptureResult(data) {
+    const playerNum = data.player_num;
+    const angle = data.angle;
+    const btnId = `p${playerNum}${capitalize(angle)}Btn`;
+    const btn = document.getElementById(btnId);
+    const indicator = document.getElementById(`p${playerNum}Ind${capitalize(angle)}`);
+
+    if (data.success) {
+        state.registrationState[playerNum][angle] = true;
+
+        // Update button appearance
+        if (btn) {
+            btn.classList.add('captured');
+            btn.innerHTML = `✓ ${capitalize(angle)}`;
+        }
+
+        // Update indicator
+        if (indicator) {
+            indicator.classList.add('active');
+        }
+
+        showToast(`Captured ${angle} for Player ${playerNum}`, 'success');
+
+        // Check if all angles captured (enable register button when at least 1 captured)
+        checkReadyToRegister(playerNum);
+
+    } else {
+        showToast(data.message || 'Capture failed', 'error');
+        // Re-enable button
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Check if player is ready to register (all 4 angles captured)
+function checkReadyToRegister(playerNum) {
+    const angles = state.registrationState[playerNum];
+    const count = Object.values(angles).filter(v => v).length;
+    const regBtn = document.getElementById(`regPlayer${playerNum}Btn`);
+
+    // Enable register button when all 4 angles captured
+    if (count >= 4 && regBtn) {
+        regBtn.disabled = false;
+    }
+}
+
+// Capitalize first letter
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function handleRegistrationResult(data) {
@@ -531,18 +613,38 @@ function playAgain() {
     state.players = [];
     state.lastThrowInfo = null;
 
+    // Reset registration state
+    state.registrationState = {
+        1: { front: false, back: false, left: false, right: false },
+        2: { front: false, back: false, left: false, right: false }
+    };
+
     // Reset registration UI
     [1, 2].forEach(num => {
         const card = document.getElementById(`player${num}Card`);
         const status = document.getElementById(`player${num}Status`);
-        const btn = document.getElementById(`regPlayer${num}Btn`);
+        const regBtn = document.getElementById(`regPlayer${num}Btn`);
         const input = document.getElementById(`player${num}Name`);
 
         card.classList.remove('registered');
         status.textContent = '';
-        btn.disabled = false;
-        btn.textContent = '📷 Capture & Register';
+        regBtn.disabled = true;
+        regBtn.textContent = `✅ Register Player ${num}`;
         input.value = '';
+
+        // Reset angle buttons and indicators
+        ['front', 'back', 'left', 'right'].forEach(angle => {
+            const btn = document.getElementById(`p${num}${capitalize(angle)}Btn`);
+            const ind = document.getElementById(`p${num}Ind${capitalize(angle)}`);
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('captured');
+                btn.innerHTML = `📷 ${capitalize(angle)}`;
+            }
+            if (ind) {
+                ind.classList.remove('active');
+            }
+        });
     });
 
     document.getElementById('startGameBtn').disabled = true;

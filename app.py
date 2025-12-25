@@ -74,6 +74,10 @@ class AppState:
         self.BALL_DETECT_THRESHOLD = 3  # Frames to confirm ball detected
         self.BALL_LOST_THRESHOLD = 10   # Frames to confirm ball lost
         self.BOTTLE_DETECT_THRESHOLD = 5  # Frames to confirm bottles visible
+        
+        # Registration State - stores crops per player per angle
+        # {player_num: {'front': crop, 'back': crop, 'left': crop, 'right': crop}}
+        self.pending_registrations = {}
 
 app_state = AppState()
 
@@ -129,17 +133,21 @@ def handle_settings(data):
     emit('game_state', app_state.game_manager.get_game_state_dict())
     print(f"Settings: COM={app_state.com_port}, Bottles={num_bottles}, YOLO={app_state.yolo_model}")
 
-@socketio.on('register_player')
-def handle_register_player(data):
-    """Register a player"""
-    player_num = data.get('player_num')
-    name = data.get('name', '').strip()
+@socketio.on('register_capture')
+def handle_register_capture(data):
+    """Capture a single angle for registration (multi-angle workflow)"""
+    player_num = int(data.get('player_num', 0))
+    angle = data.get('angle', '')  # 'front', 'back', 'left', 'right'
     
-    if not name:
-        emit('registration_result', {'success': False, 'message': 'Name is required'})
+    if not player_num or not angle:
+        emit('capture_result', {'success': False, 'message': 'Invalid parameters'})
         return
     
-    # Capture current frame for registration
+    # Initialize dictionary if needed
+    if player_num not in app_state.pending_registrations:
+        app_state.pending_registrations[player_num] = {}
+        
+    # Capture current frame
     if app_state.current_frame is not None:
         frame = app_state.current_frame.copy()
         
@@ -148,7 +156,7 @@ def handle_register_player(data):
         persons = app_state.yolo.get_person_crops(frame, results)
         
         if persons:
-            # Get largest person crop
+            # Get largest person crop (most likely the player standing in front)
             best_crop = None
             best_area = 0
             for crop, (x1, y1, x2, y2) in persons:
@@ -158,28 +166,70 @@ def handle_register_player(data):
                     best_crop = crop
             
             if best_crop is not None:
-                # Register with ReID
-                app_state.reid.register_player_from_samples(name, [best_crop])
+                # Save crop for this angle
+                app_state.pending_registrations[player_num][angle] = best_crop
                 
-                # Register in game manager
-                if app_state.game_manager.register_player(name):
-                    emit('registration_result', {
-                        'success': True,
-                        'player_num': player_num,
-                        'name': name
-                    })
-                    emit('game_state', app_state.game_manager.get_game_state_dict())
-                    return
+                # Count captured angles
+                captured_count = len(app_state.pending_registrations[player_num])
+                
+                emit('capture_result', {
+                    'success': True,
+                    'player_num': player_num,
+                    'angle': angle,
+                    'captured_count': captured_count
+                })
+                return
         
-        emit('registration_result', {
+        emit('capture_result', {
             'success': False,
-            'message': 'No person detected. Please stand in front of the camera.'
+            'player_num': player_num,
+            'angle': angle,
+            'message': 'No person detected'
         })
     else:
-        emit('registration_result', {
+        emit('capture_result', {
             'success': False,
+            'player_num': player_num,
             'message': 'Camera not ready'
         })
+
+@socketio.on('finalize_registration')
+def handle_finalize_registration(data):
+    """Finalize registration using all captured angle crops"""
+    player_num = int(data.get('player_num', 0))
+    name = data.get('name', '').strip()
+    
+    if not name:
+        emit('registration_result', {'success': False, 'message': 'Name is required'})
+        return
+    
+    if player_num not in app_state.pending_registrations or not app_state.pending_registrations[player_num]:
+        emit('registration_result', {'success': False, 'message': 'No angles captured. Please capture at least one angle.'})
+        return
+        
+    # Get all captured crops (multiple angles)
+    crops = list(app_state.pending_registrations[player_num].values())
+    
+    # Register with ReID using all captured samples
+    # This uses the hybrid feature extraction (deep embedding + color histogram)
+    sample_count = app_state.reid.register_player_from_samples(name, crops)
+    
+    # Register in game manager
+    if app_state.game_manager.register_player(name):
+        # Clear pending after successful registration
+        del app_state.pending_registrations[player_num]
+        
+        print(f"Player '{name}' registered with {sample_count} feature samples from {len(crops)} angles")
+        
+        emit('registration_result', {
+            'success': True,
+            'player_num': player_num,
+            'name': name,
+            'sample_count': sample_count
+        })
+        emit('game_state', app_state.game_manager.get_game_state_dict())
+    else:
+        emit('registration_result', {'success': False, 'message': 'Registration failed in game manager'})
 
 @socketio.on('start_game')
 def handle_start_game():
@@ -430,14 +480,14 @@ def track_player(frame, results, player_name):
     
     # Check for ball - transition to TRACKING_BALL
     all_objects = app_state.yolo.get_everything_attr(results)
-    ball_found = any(cls.lower() == 'tennisball' for cls, _, _ in all_objects)
+    ball_found = any(cls.lower() == 'tennis_ball' for cls, _, _ in all_objects)
     
     if ball_found:
         app_state.ball_visible_count += 1
         if app_state.ball_visible_count >= app_state.BALL_DETECT_THRESHOLD:
             gm.on_ball_detected()
             app_state.ball_visible_count = 0
-            socketio.emit('tracking_status', {'target': 'tennisball', 'found': True})
+            socketio.emit('tracking_status', {'target': 'tennis_ball', 'found': True})
             socketio.emit('game_state', gm.get_game_state_dict())
     else:
         app_state.ball_visible_count = 0
@@ -450,7 +500,7 @@ def track_ball(frame, results):
     
     # Track ball with gimbal
     if app_state.tracker:
-        result = app_state.tracker.camera_track(frame, "tennisball", conf=app_state.conf, iou=app_state.iou)
+        result = app_state.tracker.camera_track(frame, "tennis_ball", conf=app_state.conf, iou=app_state.iou)
         
         if result['found']:
             app_state.ball_lost_count = 0
