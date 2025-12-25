@@ -33,3 +33,4 @@ player_db/
 # Uncomment if you want to ignore model weights
 *.pt 
 !merged_v2.pt
+!merged_v3.pt
