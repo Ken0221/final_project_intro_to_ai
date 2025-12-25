@@ -226,8 +226,8 @@ class CameraTracker:
         # abs_error = abs(error_x)*
 
         if is_tennis:
-            # speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
-            speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x) * self.pan_speed_factor
+            speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
+            # speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x) * self.pan_speed_factor
         else:
             speed_deviation = np.tanh(error_x) * self.pan_speed_factor
         

@@ -56,8 +56,8 @@ class AppState:
         self.video_thread = None
 
         # hyperparameter
-        self.conf = 0.1
-        self.iou = 0.7
+        self.conf = 0.25
+        self.iou = 0.55
         
         # Current frame data
         self.current_frame = None
@@ -78,6 +78,9 @@ class AppState:
         # Registration State - stores crops per player per angle
         # {player_num: {'front': crop, 'back': crop, 'left': crop, 'right': crop}}
         self.pending_registrations = {}
+        
+        # Debug mode - shows all detected persons with confidence scores
+        self.debug_mode = False
 
 app_state = AppState()
 
@@ -135,28 +138,22 @@ def handle_settings(data):
 
 @socketio.on('register_capture')
 def handle_register_capture(data):
-    """Capture a single angle for registration (multi-angle workflow)"""
-    player_num = int(data.get('player_num', 0))
-    angle = data.get('angle', '')  # 'front', 'back', 'left', 'right'
+    """Capture a single angle for registration"""
+    player_num = data.get('player_num')  # e.g., 'player1' or 1
+    angle = data.get('angle')            # 'front', 'back', 'left', 'right'
     
     if not player_num or not angle:
-        emit('capture_result', {'success': False, 'message': 'Invalid parameters'})
         return
-    
-    # Initialize dictionary if needed
-    if player_num not in app_state.pending_registrations:
-        app_state.pending_registrations[player_num] = {}
-        
-    # Capture current frame
+
     if app_state.current_frame is not None:
         frame = app_state.current_frame.copy()
         
-        # Detect persons
+        # Detect person
         results = app_state.yolo.detect(frame, conf=app_state.conf, iou=app_state.iou)
         persons = app_state.yolo.get_person_crops(frame, results)
         
         if persons:
-            # Get largest person crop (most likely the player standing in front)
+            # Get largest person crop
             best_crop = None
             best_area = 0
             for crop, (x1, y1, x2, y2) in persons:
@@ -166,24 +163,23 @@ def handle_register_capture(data):
                     best_crop = crop
             
             if best_crop is not None:
-                # Save crop for this angle
-                app_state.pending_registrations[player_num][angle] = best_crop
+                # Initialize list if needed
+                if player_num not in app_state.pending_registrations:
+                    app_state.pending_registrations[player_num] = []
                 
-                # Count captured angles
-                captured_count = len(app_state.pending_registrations[player_num])
+                # Store crop (append to list)
+                app_state.pending_registrations[player_num].append(best_crop)
                 
                 emit('capture_result', {
                     'success': True,
                     'player_num': player_num,
-                    'angle': angle,
-                    'captured_count': captured_count
+                    'angle': angle
                 })
                 return
         
         emit('capture_result', {
             'success': False,
             'player_num': player_num,
-            'angle': angle,
             'message': 'No person detected'
         })
     else:
@@ -195,41 +191,35 @@ def handle_register_capture(data):
 
 @socketio.on('finalize_registration')
 def handle_finalize_registration(data):
-    """Finalize registration using all captured angle crops"""
-    player_num = int(data.get('player_num', 0))
+    """Finalize registration after all angles captured"""
+    player_num = data.get('player_num')
     name = data.get('name', '').strip()
     
     if not name:
         emit('registration_result', {'success': False, 'message': 'Name is required'})
         return
-    
-    if player_num not in app_state.pending_registrations or not app_state.pending_registrations[player_num]:
-        emit('registration_result', {'success': False, 'message': 'No angles captured. Please capture at least one angle.'})
-        return
         
-    # Get all captured crops (multiple angles)
-    crops = list(app_state.pending_registrations[player_num].values())
-    
-    # Register with ReID using all captured samples
-    # This uses the hybrid feature extraction (deep embedding + color histogram)
-    sample_count = app_state.reid.register_player_from_samples(name, crops)
+    crops = app_state.pending_registrations.get(player_num, [])
+    if not crops:
+        emit('registration_result', {'success': False, 'message': 'No samples captured'})
+        return
+
+    # Register with ReID
+    app_state.reid.register_player_from_samples(name, crops)
     
     # Register in game manager
     if app_state.game_manager.register_player(name):
-        # Clear pending after successful registration
+        # Clear pending
         del app_state.pending_registrations[player_num]
-        
-        print(f"Player '{name}' registered with {sample_count} feature samples from {len(crops)} angles")
         
         emit('registration_result', {
             'success': True,
             'player_num': player_num,
-            'name': name,
-            'sample_count': sample_count
+            'name': name
         })
         emit('game_state', app_state.game_manager.get_game_state_dict())
     else:
-        emit('registration_result', {'success': False, 'message': 'Registration failed in game manager'})
+        emit('registration_result', {'success': False, 'message': 'Registration failed'})
 
 @socketio.on('start_game')
 def handle_start_game():
@@ -429,56 +419,109 @@ def process_game_frame(frame):
     
     return frame
 
-def track_player(frame, results, player_name):
-    """Track the current player"""
+def track_player(frame, results, target_player_name):
+    """Track player using Global Greedy Matching"""
     gm = app_state.game_manager
     
-    # Get person crops and identify player
+    # Get person crops
     persons = app_state.yolo.get_person_crops(frame, results)
     
-    target_box = None
-    for crop, (x1, y1, x2, y2) in persons:
-        identified, score, _ = app_state.reid.identify_player(crop, threshold=0.5)
-        
-        # if identified == player_name:
-        if True:
-            target_box = (x1, y1, x2, y2)
-            app_state.current_player_crop = crop
-            
-            # Draw player box
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
-            cv2.putText(frame, f"{player_name} ({score:.2f})", (x1, y1 - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2)
-            break
+    # 1. Collect all potential matches
+    candidates = [] # [(score, person_idx, player_name), ...]
+    person_data = [] # Stores (box, scores_dict) for rendering
     
-    # Track player with gimbal
+    ID_THRESHOLD = 0.55
+    
+    for idx, (person_img, (x1, y1, x2, y2)) in enumerate(persons):
+        _, _, scores_dict = app_state.reid.identify_player(person_img, threshold=ID_THRESHOLD)
+        person_data.append(((x1, y1, x2, y2), scores_dict))
+        
+        if scores_dict:
+            for p_name, p_vals in scores_dict.items():
+                s = p_vals['combined']
+                if s > ID_THRESHOLD:
+                    candidates.append((s, idx, p_name))
+    
+    # 2. Global Greedy Matching
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    assigned_persons = set()
+    assigned_players = set()
+    final_assignments = {} # person_idx -> (name, score)
+    
+    for score, p_idx, p_name in candidates:
+        if p_idx in assigned_persons or p_name in assigned_players:
+            continue
+        
+        final_assignments[p_idx] = (p_name, score)
+        assigned_persons.add(p_idx)
+        assigned_players.add(p_name)
+    
+    # 3. Find target player and visualize
+    target_box = None
+    
+    for idx, (box_coords, scores_dict) in enumerate(person_data):
+        x1, y1, x2, y2 = box_coords
+        
+        display_name = "Unknown"
+        score = 0.0
+        color = (0, 0, 255) # Red for unknown
+        
+        if idx in final_assignments:
+            name, s = final_assignments[idx]
+            display_name = name
+            score = s
+            color = (255, 0, 255) # Magenta for identified
+            
+            if name == target_player_name:
+                target_box = (x1, y1, x2, y2)
+                app_state.current_player_crop = persons[idx][0]
+        
+        # Draw on frame
+        # Debug mode: show ALL persons with their scores
+        # Normal mode: only show target player
+        if app_state.debug_mode or display_name == target_player_name:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, f"{display_name} ({score:.2f})", (x1, y1 - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        
+        # Debug mode: also show all player scores for this person
+        if app_state.debug_mode and scores_dict:
+            y_offset = y1 + 20
+            for p_name, p_scores in scores_dict.items():
+                debug_text = f"{p_name}: {p_scores['combined']:.2f}"
+                cv2.putText(frame, debug_text, (x1, y_offset), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                y_offset += 18
+    
+    # Debug mode indicator
+    if app_state.debug_mode:
+        cv2.putText(frame, "[DEBUG MODE]", (20, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    
+    # 4. Control Gimbal if target found
     if target_box and app_state.tracker and app_state.tracker.connected:
         cx = (target_box[0] + target_box[2]) // 2
         cy = (target_box[1] + target_box[3]) // 2
         
-        # Calculate error and send to tracker
         error_x = (app_state.tracker.frame_center_x - cx) / app_state.tracker.frame_center_x
         error_y = (app_state.tracker.frame_center_y - cy) / app_state.tracker.frame_center_y
-        # print("Error X:", error_x)
-        # print("Error Y:", error_y)
+        
         pan_speed = app_state.tracker._calculate_pan_speed(error_x, is_tennis=False)
         new_tilt_angle = app_state.tracker._calculate_tilt_angle(error_y)
-        # print("Pan Speed:", pan_speed)
-        # print("New Tilt Angle:", new_tilt_angle)
-        # Update tracker state (critical for incremental tilt adjustment!)
-        app_state.tracker.current_tilt_angle = new_tilt_angle
         
-        # print(f"Pan Speed: {pan_speed}, Tilt Angle: {tilt_angle}")
+        app_state.tracker.current_tilt_angle = new_tilt_angle
         app_state.tracker._send_command(pan_speed, new_tilt_angle)
+
     elif app_state.tracker and app_state.tracker.connected:
-        # Target not found - stop pan motor, maintain tilt
+        # Target lost/not found this frame
         app_state.tracker._send_command(90, app_state.tracker.current_tilt_angle)
     
-    # Emit player crop
-    if app_state.current_player_crop is not None:
-        emit_player_crop(app_state.current_player_crop, player_name)
+    # Emit player crop (always emit when target found, regardless of tracker)
+    if target_box and app_state.current_player_crop is not None:
+        emit_player_crop(app_state.current_player_crop, target_player_name)
     
-    # Check for ball - transition to TRACKING_BALL
+    # 5. Check for ball (use correct class name: tennis_ball)
     all_objects = app_state.yolo.get_everything_attr(results)
     ball_found = any(cls.lower() == 'tennis_ball' for cls, _, _ in all_objects)
     
@@ -671,15 +714,20 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Bowling Scorer Web App')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host to bind to')
     parser.add_argument('--port', type=int, default=5001, help='Port to bind to')
-    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    parser.add_argument('--debug', action='store_true', help='Enable Flask debug mode')
+    parser.add_argument('--debug_reid', action='store_true', help='Enable ReID debug overlay (shows all persons with scores)')
     
     args = parser.parse_args()
+    
+    # Set debug mode for ReID visualization
+    app_state.debug_mode = args.debug_reid
     
     try:
         print("=" * 50)
         print("🎳 Bowling Scorer Web Application")
         print("=" * 50)
         print(f"Starting server on http://{args.host}:{args.port}")
+        print(f"ReID Debug Mode: {'ON' if args.debug_reid else 'OFF'}")
         print("Open a browser to access the application")
         print("=" * 50)
         
