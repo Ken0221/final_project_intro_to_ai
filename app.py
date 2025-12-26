@@ -86,6 +86,13 @@ class AppState:
         self.temporal_smoothing_enabled = True  # Default enabled
         self.bottle_count_history = []  # Rolling window of bottle counts
         self.TEMPORAL_SMOOTHING_WINDOW = 5  # Number of frames to consider
+        
+        # Strike detection when no bottles visible
+        self.player_left_time = None  # When player left frame (for no-bottle strike detection)
+        self.NO_BOTTLE_STRIKE_TIMEOUT = 5.0  # Seconds to wait before declaring strike
+        
+        # Flag to ensure player is seen before starting next throw
+        self.player_seen_after_count = False  # Start false, set true after count, set false when player seen
 
 app_state = AppState()
 
@@ -610,11 +617,16 @@ def track_player(frame, results, target_player_name):
     if target_box and app_state.current_player_crop is not None:
         emit_player_crop(app_state.current_player_crop, target_player_name)
     
+    # Mark that player has been seen (for state flow control)
+    if target_box:
+        app_state.player_seen_after_count = True
+    
     # 5. Check for ball (use correct class name: tennis_ball)
+    # Only look for ball if player has been seen after last count
     all_objects = app_state.yolo.get_everything_attr(results)
     ball_found = any(cls.lower() == 'tennis_ball' for cls, _, _ in all_objects)
     
-    if ball_found:
+    if ball_found and app_state.player_seen_after_count:
         app_state.ball_visible_count += 1
         if app_state.ball_visible_count >= app_state.BALL_DETECT_THRESHOLD:
             gm.on_ball_detected()
@@ -627,7 +639,7 @@ def track_player(frame, results, target_player_name):
     return frame
 
 def track_ball(frame, results):
-    """Track the ball"""
+    """Track the ball and detect strikes (including when all bottles knocked down)"""
     gm = app_state.game_manager
     
     # Track ball with gimbal
@@ -643,24 +655,70 @@ def track_ball(frame, results):
         else:
             app_state.ball_lost_count += 1
     
-    # Check for bottles - transition to TRACKING_BOTTLE
+    # Check for bottles and player visibility
     bottles = get_standing_bottles(results)
+    persons = app_state.yolo.get_person_crops(frame, results)
+    player_visible = len(persons) > 0
+    bottles_visible = len(bottles) > 0
     
-    if len(bottles) > 0:
-        app_state.bottles_visible_count += 1
-    else:
+    # Track player visibility state
+    if player_visible:
+        # Player is visible - reset timers and counts
+        app_state.player_left_time = None
         app_state.bottles_visible_count = 0
-    
-    # Transition conditions:
-    # 1. Ball lost AND bottles visible
-    # 2. Ball lost for too long
-    # if app_state.ball_lost_count >= app_state.BALL_LOST_THRESHOLD:
-    if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
-        gm.on_bottles_visible()
-        app_state.counting_start_time = time.time()
-        bottle_label = app_state.yolo.bottle_label if app_state.yolo else 'bottle'
-        socketio.emit('tracking_status', {'target': bottle_label, 'found': True})
-        socketio.emit('game_state', gm.get_game_state_dict())
+        cv2.putText(frame, "Player in frame - waiting...", (50, 50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+    else:
+        # Player has left frame - start timing
+        if app_state.player_left_time is None:
+            app_state.player_left_time = time.time()
+        
+        time_since_player_left = time.time() - app_state.player_left_time
+        
+        if bottles_visible:
+            # Case 1: Bottles are visible, player is gone
+            app_state.bottles_visible_count += 1
+            
+            if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
+                # Transition to counting state
+                gm.on_bottles_visible()
+                app_state.counting_start_time = time.time()
+                app_state.player_left_time = None  # Reset for next throw
+                bottle_label = app_state.yolo.bottle_label if app_state.yolo else 'bottle'
+                socketio.emit('tracking_status', {'target': bottle_label, 'found': True})
+                socketio.emit('game_state', gm.get_game_state_dict())
+        else:
+            # Case 2: No bottles visible, player is gone
+            # This could be a strike (all bottles knocked down)
+            app_state.bottles_visible_count = 0
+            remaining = app_state.NO_BOTTLE_STRIKE_TIMEOUT - time_since_player_left
+            
+            if remaining > 0:
+                # Still waiting - show countdown
+                cv2.putText(frame, f"No bottles detected - Strike check in {remaining:.1f}s", (50, 50),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            else:
+                # 5 seconds passed with no bottles - it's a strike!
+                print("STRIKE DETECTED: No bottles visible after throw!")
+                app_state.player_left_time = None
+                
+                # Directly record the throw as a strike (0 standing bottles)
+                gm.state = GameState.COUNTING
+                result = gm.record_throw(0)  # 0 standing bottles = all knocked down
+                
+                socketio.emit('score_update', result)
+                socketio.emit('game_state', gm.get_game_state_dict())
+                
+                # Reset tracking state
+                app_state.ball_visible_count = 0
+                app_state.ball_lost_count = 0
+                app_state.bottles_visible_count = 0
+                app_state.counting_start_time = None
+                app_state.bottle_count_history = []
+                app_state.player_seen_after_count = False  # Wait for player before next throw
+                
+                if result.get('game_over'):
+                    socketio.emit('game_over', gm.get_game_state_dict())
     
     return frame
 
@@ -766,6 +824,8 @@ def count_bottles(frame, results):
     app_state.bottles_visible_count = 0
     app_state.counting_start_time = None
     app_state.bottle_count_history = []  # Clear history for next throw
+    app_state.player_left_time = None
+    app_state.player_seen_after_count = False  # Wait for player before next throw
     
     # Check game over
     if result.get('game_over'):
