@@ -81,6 +81,11 @@ class AppState:
         
         # Debug mode - shows all detected persons with confidence scores
         self.debug_mode = False
+        
+        # Temporal Smoothing for bottle counting
+        self.temporal_smoothing_enabled = True  # Default enabled
+        self.bottle_count_history = []  # Rolling window of bottle counts
+        self.TEMPORAL_SMOOTHING_WINDOW = 5  # Number of frames to consider
 
 app_state = AppState()
 
@@ -92,6 +97,19 @@ app_state = AppState()
 def index():
     """Serve the main page"""
     return render_template('index.html')
+
+@app.route('/api/registered_players')
+def get_registered_players():
+    """Get list of registered players from player_db folder"""
+    import os
+    players = []
+    db_path = 'player_db'
+    if os.path.exists(db_path):
+        for filename in os.listdir(db_path):
+            if filename.endswith('.npy'):
+                player_name = os.path.splitext(filename)[0]
+                players.append(player_name)
+    return jsonify({'players': sorted(players)})
 
 # ==========================================
 # SocketIO Events
@@ -126,6 +144,12 @@ def handle_settings(data):
     
     app_state.game_manager.set_settings(app_state.com_port, num_frames, num_bottles)
     app_state.game_manager.state = GameState.REGISTRATION
+    
+    # Stop existing video thread before reinitializing
+    stop_video_thread()
+    
+    # Clear pending registrations (starting fresh)
+    app_state.pending_registrations = {}
     
     # Initialize components with new settings
     initialize_components(force_reload=True)
@@ -221,6 +245,38 @@ def handle_finalize_registration(data):
     else:
         emit('registration_result', {'success': False, 'message': 'Registration failed'})
 
+@socketio.on('select_registered_player')
+def handle_select_registered_player(data):
+    """Select a previously registered player directly (no re-capture needed)"""
+    player_num = data.get('player_num')
+    name = data.get('name', '').strip()
+    
+    if not name:
+        emit('registration_result', {'success': False, 'message': 'Player name is required'})
+        return
+    
+    # Check if player exists in ReID database
+    if app_state.reid is None:
+        emit('registration_result', {'success': False, 'message': 'ReID not initialized. Please start setup first.'})
+        return
+    
+    if name not in app_state.reid.known_players:
+        emit('registration_result', {'success': False, 'message': f'Player "{name}" not found in database'})
+        return
+    
+    # Register in game manager (player features already loaded from disk)
+    if app_state.game_manager.register_player(name):
+        emit('registration_result', {
+            'success': True,
+            'player_num': player_num,
+            'name': name,
+            'from_database': True
+        })
+        emit('game_state', app_state.game_manager.get_game_state_dict())
+        print(f"Player {player_num} selected from database: {name}")
+    else:
+        emit('registration_result', {'success': False, 'message': 'Registration failed - player may already be registered'})
+
 @socketio.on('start_game')
 def handle_start_game():
     """Start the game"""
@@ -255,6 +311,7 @@ def handle_reset_game():
     app_state.ball_visible_count = 0
     app_state.ball_lost_count = 0
     app_state.bottles_visible_count = 0
+    app_state.pending_registrations = {}
     
     emit('game_state', app_state.game_manager.get_game_state_dict())
 
@@ -272,9 +329,30 @@ def handle_disconnect_arduino():
         app_state.tracker.disconnect()
         emit('arduino_status', {'connected': False})
 
+@socketio.on('toggle_temporal_smoothing')
+def handle_toggle_temporal_smoothing():
+    """Toggle temporal smoothing for bottle detection"""
+    app_state.temporal_smoothing_enabled = not app_state.temporal_smoothing_enabled
+    status = "ON" if app_state.temporal_smoothing_enabled else "OFF"
+    print(f"Temporal Smoothing: {status}")
+    emit('temporal_smoothing_status', {'enabled': app_state.temporal_smoothing_enabled})
+
 # ==========================================
 # Video Processing
 # ==========================================
+
+def stop_video_thread():
+    """Stop the video processing thread safely"""
+    if app_state.video_thread is not None and app_state.video_thread.is_alive():
+        print("Stopping video processing thread...")
+        app_state.running = False
+        # Wait for thread to finish (with timeout)
+        app_state.video_thread.join(timeout=3.0)
+        if app_state.video_thread.is_alive():
+            print("Warning: Video thread did not stop in time")
+        else:
+            print("Video processing thread stopped")
+        app_state.video_thread = None
 
 def initialize_components(force_reload=False):
     """Initialize YOLO, ReID, Tracker, and Camera"""
@@ -290,7 +368,12 @@ def initialize_components(force_reload=False):
         print(f"Loading ReID model with backbone: {app_state.reid_backbone}")
         app_state.reid = PlayerReID(backbone=app_state.reid_backbone)
     
-    # Initialize Camera
+    # Initialize Camera - release old camera first if force_reload
+    if force_reload and app_state.cap is not None:
+        print("Releasing old camera...")
+        app_state.cap.release()
+        app_state.cap = None
+    
     if app_state.cap is None or not app_state.cap.isOpened():
         print(f"Opening camera: {app_state.camera_source}")
         app_state.cap = cv2.VideoCapture(app_state.camera_source)
@@ -301,9 +384,15 @@ def initialize_components(force_reload=False):
         actual_height = int(app_state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"Camera resolution: {actual_width}x{actual_height}")
     
-    # Initialize Tracker (or update detector reference)
+    # Get current camera dimensions
     actual_width = int(app_state.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_height = int(app_state.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Initialize Tracker - rebuild if force_reload or settings changed
+    if force_reload and app_state.tracker is not None:
+        print("Disconnecting old tracker...")
+        app_state.tracker.disconnect()
+        app_state.tracker = None
     
     if app_state.tracker is None:
         app_state.tracker = CameraTracker(
@@ -603,19 +692,41 @@ def track_bottles(frame, results):
     return frame
 
 def count_bottles(frame, results):
-    """Count standing bottles and record throw"""
+    """Count standing bottles and record throw with optional temporal smoothing"""
     gm = app_state.game_manager
     
     bottles = get_standing_bottles(results)
-    standing_count = len(bottles)
+    raw_count = len(bottles)
+    
+    # Apply temporal smoothing if enabled
+    if app_state.temporal_smoothing_enabled:
+        # Add current count to history
+        app_state.bottle_count_history.append(raw_count)
+        
+        # Keep only the last N counts
+        if len(app_state.bottle_count_history) > app_state.TEMPORAL_SMOOTHING_WINDOW:
+            app_state.bottle_count_history.pop(0)
+        
+        # Use mode (most frequent value) for smoothed count
+        from collections import Counter
+        count_freq = Counter(app_state.bottle_count_history)
+        smoothed_count = count_freq.most_common(1)[0][0]
+        standing_count = smoothed_count
+        
+        # Display both raw and smoothed counts
+        cv2.putText(frame, f"Raw: {raw_count} | Smoothed: {smoothed_count}", (50, 100),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
+        cv2.putText(frame, f"[Temporal Smoothing ON]", (50, 140),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    else:
+        standing_count = raw_count
+        # Display count (no smoothing)
+        cv2.putText(frame, f"Standing: {standing_count}", (50, 100),
+                   cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
     
     # Draw bottles
     for (x1, y1, x2, y2) in bottles:
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-    
-    # Display count
-    cv2.putText(frame, f"Standing: {standing_count}", (50, 100),
-               cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
     
     # Record the throw
     result = gm.record_throw(standing_count)
@@ -629,6 +740,7 @@ def count_bottles(frame, results):
     app_state.ball_lost_count = 0
     app_state.bottles_visible_count = 0
     app_state.counting_start_time = None
+    app_state.bottle_count_history = []  # Clear history for next throw
     
     # Check game over
     if result.get('game_over'):

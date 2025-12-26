@@ -520,6 +520,7 @@ class GameManager:
             "current_frame": current_player.get_current_frame_index() + 1 if current_player else 0,
             "current_throw": current_player.get_current_throw() if current_player else 0,
             "num_frames": self.num_frames,
+            "num_bottles": self.num_bottles,
             "tracking_target": self.tracking_target,
             "winner": self.get_winner() if self.state == GameState.GAME_OVER else None
         }

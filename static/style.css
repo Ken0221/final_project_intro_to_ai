@@ -442,6 +442,50 @@ body {
     font-family: inherit;
 }
 
+/* Registered Player Select Dropdown */
+.registered-player-select {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: var(--radius);
+    border: 1px dashed var(--primary);
+}
+
+.registered-player-select label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.registered-player-select .select-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.registered-player-select select {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.registered-player-select select:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
 .player-status {
     margin-top: 0.5rem;
     font-size: 0.875rem;
@@ -501,9 +545,9 @@ body {
     /* Auto width/height to fit image aspect ratio */
     width: auto;
     height: auto;
-    /* Constraints */
-    max-width: 25%;
-    max-height: 40%;
+    /* Constraints - increased for better visibility */
+    max-width: 30%;
+    max-height: 50%;
     background: var(--bg-glass);
     backdrop-filter: blur(8px);
     border-radius: var(--radius);
@@ -743,9 +787,21 @@ body {
 .correction-area {
     display: flex;
     justify-content: flex-end;
+    gap: 0.5rem;
     flex-shrink: 0;
     margin-bottom: 0.25rem;
     padding-right: 0.5rem;
+}
+
+/* Toggle button active state */
+.btn-outline.toggle-active {
+    border-color: var(--success);
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.btn-outline.toggle-active:hover {
+    background: rgba(16, 185, 129, 0.2);
 }
 
 /* ==========================================

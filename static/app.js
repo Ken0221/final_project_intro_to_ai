@@ -17,6 +17,7 @@ const state = {
     lastThrowInfo: null,
     arduinoConnected: false,
     numFrames: 0, // Track number of frames to rebuild header only when needed
+    numBottles: 10, // Track number of bottles for standing pins display
 
     // Track captured angles for each player
     registrationState: {
@@ -33,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeSocket();
     initializeEventListeners();
     updateFramesValue();
+    // Fetch registered players for the dropdowns
+    refreshRegisteredPlayers();
 });
 
 function initializeSocket() {
@@ -106,6 +109,11 @@ function initializeSocket() {
     // Error handling
     state.socket.on('error', (data) => {
         showToast(data.message, 'error');
+    });
+
+    // Temporal smoothing status update
+    state.socket.on('temporal_smoothing_status', (data) => {
+        updateTemporalSmoothingButton(data.enabled);
     });
 }
 
@@ -211,6 +219,69 @@ function startSetup() {
 
     showScreen('registration');
     showToast(`Loading models: ${yoloModel}, ${reidBackbone}...`, 'info');
+
+    // Refresh registered players after setup (gives backend time to initialize)
+    setTimeout(refreshRegisteredPlayers, 1000);
+}
+
+// ==========================================
+// Registered Player Selection
+// ==========================================
+
+// Fetch registered players from the server
+async function refreshRegisteredPlayers() {
+    try {
+        const response = await fetch('/api/registered_players');
+        const data = await response.json();
+        const players = data.players || [];
+
+        // Populate both player dropdowns
+        populateRegisteredPlayerSelect(1, players);
+        populateRegisteredPlayerSelect(2, players);
+
+        if (players.length > 0) {
+            console.log(`Loaded ${players.length} registered players:`, players);
+        }
+    } catch (error) {
+        console.error('Failed to fetch registered players:', error);
+    }
+}
+
+// Populate the dropdown for a specific player slot
+function populateRegisteredPlayerSelect(playerNum, players) {
+    const select = document.getElementById(`player${playerNum}RegisteredSelect`);
+    if (!select) return;
+
+    // Clear existing options except the default
+    select.innerHTML = '<option value="">-- Select --</option>';
+
+    // Add player options
+    players.forEach(playerName => {
+        const option = document.createElement('option');
+        option.value = playerName;
+        option.textContent = playerName;
+        select.appendChild(option);
+    });
+}
+
+// Handle selecting a registered player from dropdown
+function onRegisteredPlayerSelect(playerNum) {
+    const select = document.getElementById(`player${playerNum}RegisteredSelect`);
+    const nameInput = document.getElementById(`player${playerNum}Name`);
+    const selectedName = select.value;
+
+    if (!selectedName) return;
+
+    // Update the name input field
+    nameInput.value = selectedName;
+
+    // Send request to select this player directly from database
+    state.socket.emit('select_registered_player', {
+        player_num: playerNum,
+        name: selectedName
+    });
+
+    showToast(`Loading ${selectedName} from database...`, 'info');
 }
 
 // ==========================================
@@ -356,7 +427,7 @@ function updatePlayerCrop(cropData, playerName) {
         cropImg.src = 'data:image/jpeg;base64,' + cropData;
     }
     if (cropName) {
-        cropName.textContent = playerName || 'Current Player';
+        cropName.textContent = `Current Player: ${playerName || 'Unknown'}`;
     }
 }
 
@@ -367,6 +438,11 @@ function updateGameState(data) {
     if (state.numFrames !== data.num_frames) {
         state.numFrames = data.num_frames;
         renderScoreboardHeader(data.num_frames);
+    }
+
+    // Track num_bottles for standing pins display
+    if (data.num_bottles) {
+        state.numBottles = data.num_bottles;
     }
 
     // Update game info bar
@@ -527,10 +603,32 @@ function handleScoreUpdate(data) {
 
     showToast(message, 'success');
 
-    // Update standing pins display
-    const standingPins = 10 - data.pins_knocked;
+    // Update standing pins display using dynamic num_bottles
+    const standingPins = state.numBottles - data.pins_knocked;
     document.getElementById('standingPins').textContent =
-        data.is_strike || data.frame_complete ? '10' : standingPins;
+        data.is_strike || data.frame_complete ? state.numBottles : standingPins;
+}
+
+// ==========================================
+// Temporal Smoothing Toggle
+// ==========================================
+
+function toggleTemporalSmoothing() {
+    state.socket.emit('toggle_temporal_smoothing');
+}
+
+function updateTemporalSmoothingButton(enabled) {
+    const btn = document.getElementById('temporalSmoothingBtn');
+    if (btn) {
+        if (enabled) {
+            btn.textContent = '🔄 Temporal Smoothing: ON';
+            btn.classList.add('toggle-active');
+        } else {
+            btn.textContent = '🔄 Temporal Smoothing: OFF';
+            btn.classList.remove('toggle-active');
+        }
+    }
+    showToast(`Temporal Smoothing: ${enabled ? 'ON' : 'OFF'} `, 'info');
 }
 
 // ==========================================
@@ -545,7 +643,7 @@ function showCorrectionModal() {
 
     const info = state.lastThrowInfo;
     document.getElementById('correctionInfo').textContent =
-        `Last throw: ${info.player}, Frame ${info.frame}, Throw ${info.throw}`;
+        `Last throw: ${info.player}, Frame ${info.frame}, Throw ${info.throw} `;
     document.getElementById('correctedPins').value = info.pins_knocked;
 
     document.getElementById('correctionModal').classList.add('active');
@@ -583,7 +681,7 @@ function showResults(data) {
     if (data.winner === 'Tie') {
         announcement.textContent = "It's a Tie! 🤝";
     } else {
-        announcement.textContent = `Winner: ${data.winner}! 🏆`;
+        announcement.textContent = `Winner: ${data.winner} ! 🏆`;
     }
 
     // Update final scores
@@ -621,30 +719,34 @@ function playAgain() {
 
     // Reset registration UI
     [1, 2].forEach(num => {
-        const card = document.getElementById(`player${num}Card`);
-        const status = document.getElementById(`player${num}Status`);
-        const regBtn = document.getElementById(`regPlayer${num}Btn`);
-        const input = document.getElementById(`player${num}Name`);
+        const card = document.getElementById(`player${num} Card`);
+        const status = document.getElementById(`player${num} Status`);
+        const regBtn = document.getElementById(`regPlayer${num} Btn`);
+        const input = document.getElementById(`player${num} Name`);
 
         card.classList.remove('registered');
         status.textContent = '';
         regBtn.disabled = true;
-        regBtn.textContent = `✅ Register Player ${num}`;
+        regBtn.textContent = `✅ Register Player ${num} `;
         input.value = '';
 
         // Reset angle buttons and indicators
         ['front', 'back', 'left', 'right'].forEach(angle => {
-            const btn = document.getElementById(`p${num}${capitalize(angle)}Btn`);
-            const ind = document.getElementById(`p${num}Ind${capitalize(angle)}`);
+            const btn = document.getElementById(`p${num}${capitalize(angle)} Btn`);
+            const ind = document.getElementById(`p${num}Ind${capitalize(angle)} `);
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove('captured');
-                btn.innerHTML = `📷 ${capitalize(angle)}`;
+                btn.innerHTML = `📷 ${capitalize(angle)} `;
             }
             if (ind) {
                 ind.classList.remove('active');
             }
         });
+
+        // Reset registered player dropdown
+        const regSelect = document.getElementById(`player${num} RegisteredSelect`);
+        if (regSelect) regSelect.selectedIndex = 0;
     });
 
     document.getElementById('startGameBtn').disabled = true;
@@ -661,7 +763,7 @@ function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
 
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = `toast ${type} `;
     toast.textContent = message;
 
     container.appendChild(toast);
@@ -680,5 +782,5 @@ function showToast(message, type = 'info') {
 function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, '0')} `;
 }

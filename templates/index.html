@@ -42,14 +42,12 @@
                     <select id="yoloModel">
                         <option value="yolo11n">YOLO11n (Fast)</option>
                         <option value="yolo11s">YOLO11s</option>
-                        <option value="yolo11m" selected>YOLO11m (Balanced)</option>
+                        <option value="yolo11m">YOLO11m (Balanced)</option>
                         <option value="yolo11l">YOLO11l</option>
                         <option value="yolo11x">YOLO11x (Accurate)</option>
-                        <option value="yolov8n">YOLOv8n (Fast)</option>
-                        <option value="yolov8s">YOLOv8s</option>
-                        <option value="yolov8m">YOLOv8m</option>
-                        <option value="yolov8l">YOLOv8l</option>
-                        <option value="yolov8x">YOLOv8x (Accurate)</option>
+                        <option value="yolo12n">YOLO12n (Fast)</option>
+                        <option value="yolo12s">YOLO12s </option>
+                        <option value="yolo12m">YOLO12m (Balanced)</option>
                         <option value="merged_v2">Merged_v2 (Custom)</option>
                         <option value="merged_v3">Merged_v3 (Custom yolo11n)</option>
                         <option value="merged_v4">Merged_v4 (Custom yolo11s)</option>
@@ -94,6 +92,18 @@
                         <div class="player-number">Player 1</div>
                         <input type="text" id="player1Name" placeholder="Enter name...">
 
+                        <!-- Select Registered Player -->
+                        <div class="registered-player-select">
+                            <label>Or select registered player:</label>
+                            <div class="select-row">
+                                <select id="player1RegisteredSelect" onchange="onRegisteredPlayerSelect(1)">
+                                    <option value="">-- Select --</option>
+                                </select>
+                                <button class="btn btn-secondary btn-sm"
+                                    onclick="refreshRegisteredPlayers()">🔄</button>
+                            </div>
+                        </div>
+
                         <div class="angle-buttons">
                             <button class="btn btn-angle" onclick="captureAngle(1, 'front')" id="p1FrontBtn">📷
                                 Front</button>
@@ -125,6 +135,18 @@
                     <div class="player-reg-card" id="player2Card">
                         <div class="player-number">Player 2</div>
                         <input type="text" id="player2Name" placeholder="Enter name...">
+
+                        <!-- Select Registered Player -->
+                        <div class="registered-player-select">
+                            <label>Or select registered player:</label>
+                            <div class="select-row">
+                                <select id="player2RegisteredSelect" onchange="onRegisteredPlayerSelect(2)">
+                                    <option value="">-- Select --</option>
+                                </select>
+                                <button class="btn btn-secondary btn-sm"
+                                    onclick="refreshRegisteredPlayers()">🔄</button>
+                            </div>
+                        </div>
 
                         <div class="angle-buttons">
                             <button class="btn btn-angle" onclick="captureAngle(2, 'front')" id="p2FrontBtn">📷
@@ -179,10 +201,14 @@
                     </table>
                 </div>
 
-                <!-- Score Correction Button (Moved here) -->
+                <!-- Game Controls Area -->
                 <div class="correction-area">
                     <button class="btn btn-outline" id="correctScoreBtn">
                         ✏️ Correct Last Score
+                    </button>
+                    <button class="btn btn-outline toggle-active" id="temporalSmoothingBtn"
+                        onclick="toggleTemporalSmoothing()">
+                        🔄 Temporal Smoothing: ON
                     </button>
                 </div>
 
@@ -202,7 +228,7 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">Standing Pins</span>
-                        <span class="info-value" id="standingPins">10</span>
+                        <span class="info-value" id="standingPins">--</span>
                     </div>
                 </div>
 
