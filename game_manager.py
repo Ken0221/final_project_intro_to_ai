@@ -32,27 +32,30 @@ class Frame:
     throw2: Optional[int] = None  # Pins knocked down in second throw
     throw3: Optional[int] = None  # Only used in 10th frame
     
-    def is_strike(self) -> bool:
-        return self.throw1 == 10
+    def is_strike(self, num_bottles: int = 10) -> bool:
+        """Check if first throw knocked all bottles (strike)"""
+        return self.throw1 == num_bottles
     
-    def is_spare(self) -> bool:
+    def is_spare(self, num_bottles: int = 10) -> bool:
+        """Check if first two throws knocked all bottles (spare)"""
         if self.throw1 is None or self.throw2 is None:
             return False
-        return not self.is_strike() and (self.throw1 + self.throw2 == 10)
+        return not self.is_strike(num_bottles) and (self.throw1 + self.throw2 == num_bottles)
     
-    def is_complete(self, is_tenth_frame: bool = False) -> bool:
+    def is_complete(self, is_tenth_frame: bool = False, num_bottles: int = 10) -> bool:
+        """Check if this frame is complete"""
         if is_tenth_frame:
             # 10th frame: need 3 throws if strike or spare
-            if self.throw1 == 10:  # Strike
+            if self.throw1 == num_bottles:  # Strike
                 return self.throw2 is not None and self.throw3 is not None
             elif self.throw1 is not None and self.throw2 is not None:
-                if self.throw1 + self.throw2 >= 10:  # Spare
+                if self.throw1 + self.throw2 >= num_bottles:  # Spare
                     return self.throw3 is not None
                 return True
             return False
         else:
             # Normal frame: complete after strike or 2 throws
-            if self.throw1 == 10:
+            if self.throw1 == num_bottles:
                 return True
             return self.throw1 is not None and self.throw2 is not None
     
@@ -109,13 +112,13 @@ class Player:
     frames: List[Frame] = field(default_factory=lambda: [Frame() for _ in range(10)])
     scores: List[Optional[int]] = field(default_factory=lambda: [None] * 10)  # Cumulative scores
     
-    def get_current_frame_index(self) -> int:
+    def get_current_frame_index(self, num_bottles: int = 10) -> int:
         """Get the index of the current frame being played"""
         num_frames = len(self.frames)
         for i, frame in enumerate(self.frames):
             is_last = (i == num_frames - 1)
             # Treat the last frame as special (allow 3 throws if strike/spare)
-            if not frame.is_complete(is_last):
+            if not frame.is_complete(is_last, num_bottles):
                 return i
         return num_frames - 1  # All frames complete
     
@@ -131,7 +134,7 @@ class Player:
         else:
             return 3
     
-    def calculate_scores(self) -> None:
+    def calculate_scores(self, num_bottles: int = 10) -> None:
         """Calculate cumulative scores for all frames"""
         cumulative = 0
         num_frames = len(self.frames)
@@ -147,26 +150,26 @@ class Player:
             is_last = (i == num_frames - 1)
             
             if is_last:  # Final frame
-                if frame.is_complete(is_tenth_frame=True):
+                if frame.is_complete(is_tenth_frame=True, num_bottles=num_bottles):
                     frame_score = frame.pins_knocked()
                     cumulative += frame_score
                     self.scores[i] = cumulative
                 else:
                     self.scores[i] = None
             else:
-                if frame.is_strike():
+                if frame.is_strike(num_bottles):
                     # Need next 2 throws
                     bonus = self._get_next_throws(i, 2)
                     if bonus is not None:
-                        cumulative += 10 + bonus
+                        cumulative += num_bottles + bonus
                         self.scores[i] = cumulative
                     else:
                         self.scores[i] = None
-                elif frame.is_spare():
+                elif frame.is_spare(num_bottles):
                     # Need next 1 throw
                     bonus = self._get_next_throws(i, 1)
                     if bonus is not None:
-                        cumulative += 10 + bonus
+                        cumulative += num_bottles + bonus
                         self.scores[i] = cumulative
                     else:
                         self.scores[i] = None
@@ -357,7 +360,7 @@ class GameManager:
         pins_knocked = self.standing_bottles_before_throw - standing_bottles
         pins_knocked = max(0, min(self.num_bottles, pins_knocked))  # Clamp to valid range
         
-        frame_idx = player.get_current_frame_index()
+        frame_idx = player.get_current_frame_index(self.num_bottles)
         frame = player.frames[frame_idx]
         throw_num = player.get_current_throw()
         is_last_frame = (frame_idx == self.num_frames - 1)
@@ -379,7 +382,7 @@ class GameManager:
         }
         
         # Recalculate scores
-        player.calculate_scores()
+        player.calculate_scores(self.num_bottles)
         
         # Determine next action
         result = {
@@ -388,13 +391,13 @@ class GameManager:
             "throw": throw_num,
             "pins_knocked": pins_knocked,
             "is_strike": throw_num == 1 and pins_knocked == self.num_bottles,
-            "is_spare": throw_num == 2 and frame.is_spare(),
-            "frame_complete": frame.is_complete(is_last_frame),
+            "is_spare": throw_num == 2 and frame.is_spare(self.num_bottles),
+            "frame_complete": frame.is_complete(is_last_frame, self.num_bottles),
             "total_score": player.get_total_score(),
         }
         
         # Handle next state
-        if frame.is_complete(is_last_frame):
+        if frame.is_complete(is_last_frame, self.num_bottles):
             # Frame complete, check if game over or switch player
             if self._check_game_over():
                 self.state = GameState.GAME_OVER
@@ -446,7 +449,7 @@ class GameManager:
             frame.throw3 = new_pins_knocked
         
         # Recalculate all scores
-        player.calculate_scores()
+        player.calculate_scores(self.num_bottles)
         
         # Update last throw info
         self.last_throw_info["pins_knocked"] = new_pins_knocked
@@ -469,7 +472,7 @@ class GameManager:
         for player in self.players:
             last_frame_idx = self.num_frames - 1
             is_last = (last_frame_idx == len(player.frames) - 1)
-            if not player.frames[last_frame_idx].is_complete(is_last):
+            if not player.frames[last_frame_idx].is_complete(is_last, self.num_bottles):
                 return False
         return True
     
@@ -498,15 +501,15 @@ class GameManager:
                     "throw2": display[1],
                     "throw3": display[2] if is_last_frame else None,
                     "score": player.scores[i],
-                    "is_strike": frame.is_strike(),
-                    "is_spare": frame.is_spare()
+                    "is_strike": frame.is_strike(self.num_bottles),
+                    "is_spare": frame.is_spare(self.num_bottles)
                 })
             
             players_data.append({
                 "name": player.name,
                 "frames": frames_data,
                 "total_score": player.get_total_score(),
-                "current_frame": player.get_current_frame_index() + 1,
+                "current_frame": player.get_current_frame_index(self.num_bottles) + 1,
                 "current_throw": player.get_current_throw()
             })
         

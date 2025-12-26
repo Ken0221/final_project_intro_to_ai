@@ -48,6 +48,21 @@ class YOLODetector:
         
         # Verify class names exist in model (for debugging)
         self._verify_classes()
+        
+        # Store actual label names for tracking
+        self._init_label_names()
+    
+    def _init_label_names(self):
+        """Initialize the actual label names used by the model for tracking."""
+        if self.is_custom_model:
+            # Merged models use 'plastic-bottle' as the class name
+            self.bottle_label = self.model.names[self.CLASS_BOTTLE]
+            self.person_label = self.model.names[self.CLASS_PERSON]
+        else:
+            # COCO models use 'bottle' and 'person'
+            self.bottle_label = "bottle"
+            self.person_label = "person"
+        print(f"Tracking labels: person='{self.person_label}', bottle='{self.bottle_label}'")
 
     def _verify_classes(self):
         """Verify and print available classes in the model."""

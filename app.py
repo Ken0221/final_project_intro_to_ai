@@ -658,7 +658,8 @@ def track_ball(frame, results):
     if app_state.bottles_visible_count >= app_state.BOTTLE_DETECT_THRESHOLD:
         gm.on_bottles_visible()
         app_state.counting_start_time = time.time()
-        socketio.emit('tracking_status', {'target': 'plastic-bottle', 'found': True})
+        bottle_label = app_state.yolo.bottle_label if app_state.yolo else 'bottle'
+        socketio.emit('tracking_status', {'target': bottle_label, 'found': True})
         socketio.emit('game_state', gm.get_game_state_dict())
     
     return frame
@@ -667,9 +668,10 @@ def track_bottles(frame, results):
     """Track bottles and start counting"""
     gm = app_state.game_manager
     
-    # Track bottles with gimbal
+    # Track bottles with gimbal (use model-specific label)
     if app_state.tracker:
-        app_state.tracker.camera_track(frame, "plastic-bottle", conf=app_state.conf, iou=app_state.iou)
+        bottle_label = app_state.yolo.bottle_label
+        app_state.tracker.camera_track(frame, bottle_label, conf=app_state.conf, iou=app_state.iou)
     
     # # Draw bottles
     # bottles = get_standing_bottles(results)
@@ -681,22 +683,40 @@ def track_bottles(frame, results):
     # Check countdown
     if app_state.counting_start_time:
         elapsed = time.time() - app_state.counting_start_time
-        remaining = max(0, 3 - int(elapsed))
+        remaining = max(0, 5 - int(elapsed))
         
         socketio.emit('countdown', {'seconds': remaining})
         
-        if elapsed >= 3.0:
+        if elapsed >= 5.0:
             gm.state = GameState.COUNTING
             socketio.emit('countdown', {'seconds': 0})
     
     return frame
 
 def count_bottles(frame, results):
-    """Count standing bottles and record throw with optional temporal smoothing"""
+    """Count standing bottles and record throw with optional temporal smoothing.
+    Uses center crop of the frame for more accurate detection.
+    """
     gm = app_state.game_manager
     
-    bottles = get_standing_bottles(results)
+    # Crop center 2/3 of the frame for more focused detection
+    h, w = frame.shape[:2]
+    crop_x1 = w // 6        # 16.7% from left
+    crop_x2 = w * 5 // 6    # 83.3% from left
+    crop_y1 = h // 6        # 16.7% from top
+    crop_y2 = h * 5 // 6    # 83.3% from top
+    
+    cropped_frame = frame[crop_y1:crop_y2, crop_x1:crop_x2]
+    
+    # Run detection on cropped frame
+    cropped_results = app_state.yolo.detect(cropped_frame, conf=app_state.conf, iou=app_state.iou)
+    bottles = get_standing_bottles(cropped_results)
     raw_count = len(bottles)
+    
+    # Draw crop region on original frame (for visualization)
+    cv2.rectangle(frame, (crop_x1, crop_y1), (crop_x2, crop_y2), (255, 255, 0), 2)
+    cv2.putText(frame, "Detection Zone", (crop_x1, crop_y1 - 10),
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
     
     # Apply temporal smoothing if enabled
     if app_state.temporal_smoothing_enabled:
@@ -724,9 +744,14 @@ def count_bottles(frame, results):
         cv2.putText(frame, f"Standing: {standing_count}", (50, 100),
                    cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
     
-    # Draw bottles
+    # Draw bottles on original frame (adjust coordinates from cropped to original)
     for (x1, y1, x2, y2) in bottles:
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # Offset coordinates back to original frame
+        orig_x1 = x1 + crop_x1
+        orig_y1 = y1 + crop_y1
+        orig_x2 = x2 + crop_x1
+        orig_y2 = y2 + crop_y1
+        cv2.rectangle(frame, (orig_x1, orig_y1), (orig_x2, orig_y2), (0, 255, 0), 2)
     
     # Record the throw
     result = gm.record_throw(standing_count)
