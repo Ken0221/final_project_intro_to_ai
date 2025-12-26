@@ -27,7 +27,7 @@ class YOLODetector:
         model_name = self.model_path.lower()
         
         # Check if using custom merged models
-        if 'merged_v2' in model_name or 'merged_v3' in model_name:
+        if 'merged' in model_name:
             # Custom model class mapping
             self.CLASS_PERSON = 2
             self.CLASS_BOTTLE = 1
