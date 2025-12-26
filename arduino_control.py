@@ -198,7 +198,7 @@ class CameraTracker:
             print(f"Error sending command: {e}")
             return False
     
-    def _calculate_pan_speed(self, error_x, is_tennis):
+    def _calculate_pan_speed(self, error_x, is_tennis, player_hold=False):
         """
         Calculate pan motor speed based on horizontal error.
 
@@ -211,6 +211,9 @@ class CameraTracker:
             error_x (float): Normalized horizontal error (-1 to 1)
                             Positive = object is to the left
                             Negative = object is to the right
+            is_tennis (bool): Whether tracking tennis ball (uses different speed curve)
+            player_hold (bool): Whether player is holding the ball (bounding boxes overlap)
+                               If True, use non-tennis speed even when tracking tennis ball
 
         Returns:
             int: Pan speed value (0-180)
@@ -225,15 +228,34 @@ class CameraTracker:
         # sign = 1 if error_x >= 0 else -1
         # abs_error = abs(error_x)*
 
-        if is_tennis:
-            speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x) * self.pan_speed_factor
-            # speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x) * self.pan_speed_factor
+        if is_tennis and not player_hold:
+            # y = -0.0011
+            # + 0.0395 * tanh(4.4133 * (x + 0.7014))
+            # + 0.0091 * tanh(4.4133 * (x + 0.0053))
+            # + 0.5536 * tanh(4.4133 * (x + 0.4382))
+            # + 0.0508 * tanh(4.4133 * (x + 0.5728))
+            # + 0.1675 * tanh(4.4133 * (x - 0.5617))
+            # + 0.4567 * tanh(4.4133 * (x - 0.4348))
+            # + 0.0371 * tanh(4.4133 * (x - 0.1117))
+            # speed_deviation = -0.0011 + 0.0395 * np.tanh(4.4133 * (error_x + 0.7014)) + 0.0091 * np.tanh(4.4133 * (error_x + 0.0053)) + 0.5536 * np.tanh(4.4133 * (error_x + 0.4382)) + 0.0508 * np.tanh(4.4133 * (error_x + 0.5728)) + 0.1675 * np.tanh(4.4133 * (error_x - 0.5617)) + 0.4567 * np.tanh(4.4133 * (error_x - 0.4348)) + 0.0371 * np.tanh(4.4133 * (error_x - 0.1117))
+            # y = 6x^(7) - 11.5x^(5) + 6.5x^(3) + 0.3x
+            # speed_deviation = 6*error_x**7 - 11.5*error_x**5 + 6.5*error_x**3 + 0.3*error_x
+            # speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x)
+            # speed_deviation = np.tanh(2 * error_x) + 0.1 * error_x - 0.8 * error_x**3 + 1.2 * error_x**5
+            # speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x)
+            if abs(error_x) > 0.5:
+                speed_deviation = np.sign(error_x) * 1.5
+            else:
+                speed_deviation = error_x * 2
         else:
-            speed_deviation = np.tanh(error_x) * self.pan_speed_factor
+            speed_deviation = np.tanh(error_x) + 0.3 * error_x**5
         
+        speed_deviation = speed_deviation * self.pan_speed_factor
         # Constrain deviation
         speed_deviation = max(-self.max_pan_deviation, 
                              min(self.max_pan_deviation, speed_deviation))
+        # print("player_hold: ", player_hold)
+        # print("speed_deviation: ", speed_deviation)
         # if abs(speed_deviation) < 22:
         #     speed_deviation = (np.sign(speed_deviation) or 1) * 22  # or 1 處理 0 的情況
         # if speed_deviation > 0:
@@ -280,6 +302,30 @@ class CameraTracker:
         # debug
         # print(f"New Tilt Angle: {new_angle}")
         return int(new_angle)
+    
+    def _boxes_overlap(self, box1, box2):
+        """
+        Check if two bounding boxes overlap.
+        
+        Args:
+            box1: (x1, y1, x2, y2) first bounding box
+            box2: (x1, y1, x2, y2) second bounding box
+        
+        Returns:
+            bool: True if boxes overlap, False otherwise
+        """
+        x1_1, y1_1, x2_1, y2_1 = box1
+        x1_2, y1_2, x2_2, y2_2 = box2
+        
+        # Check if one box is to the left of the other
+        if x2_1 < x1_2 or x2_2 < x1_1:
+            return False
+        
+        # Check if one box is above the other
+        if y2_1 < y1_2 or y2_2 < y1_1:
+            return False
+        
+        return True
     
     def camera_track(self, frame, target_label, conf=0.25, iou=0.7):
         """
@@ -341,11 +387,27 @@ class CameraTracker:
         # print("Error X:", error_x)
         # print("Error Y:", error_y)
         # Calculate motor commands
-        is_tennis = False   
+        is_tennis = False
+        player_hold = False
+        
         if target_label == "tennis_ball":
             is_tennis = True
+            
+            # Check if player is holding the ball (bounding boxes overlap)
+            # Find all person boxes
+            person_boxes = []
+            for class_name, box_coords, _ in all_objects:
+                if class_name.lower() == "person":
+                    person_boxes.append(tuple(map(int, box_coords)))
+            
+            # Check overlap with any person
+            ball_box = (x1, y1, x2, y2)
+            for person_box in person_boxes:
+                if self._boxes_overlap(ball_box, person_box):
+                    player_hold = True
+                    break
 
-        pan_speed = self._calculate_pan_speed(error_x, is_tennis)
+        pan_speed = self._calculate_pan_speed(error_x, is_tennis, player_hold)
         new_tilt_angle = self._calculate_tilt_angle(error_y)
         # print("Pan Speed:", pan_speed)
         # print("New Tilt Angle:", new_tilt_angle)
