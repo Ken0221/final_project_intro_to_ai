@@ -22,8 +22,8 @@ def train_optimized():
         print("Warning: CUDA not found. Training on CPU will be extremely slow.")
 
     # 2. Load model
-    print("Loading YOLO11n...")
-    model = YOLO("yolo11n.pt")
+    print("Loading YOLO11s...")
+    model = YOLO("yolo11s.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
@@ -34,7 +34,7 @@ def train_optimized():
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
-        batch=16,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
+        batch=8,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
         device=device,
         workers=2,              # CRITICAL for Windows: avoid multiprocessing errors
         verbose=False,          # CRITICAL: Prevent RecursionError in deepcopy/FLOPs check
@@ -52,7 +52,7 @@ def train_optimized():
         lr0=0.001,
         lrf=0.01,
         patience=10,
-        name="yolo11n_highres_balanced_0.99scale",
+        name="yolo11s_highres_balanced_0.99scale",
         save=True,
         exist_ok=True,
         pretrained=True
