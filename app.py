@@ -595,7 +595,32 @@ def track_player(frame, results, target_player_name):
         cv2.putText(frame, "[DEBUG MODE]", (20, 50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
     
-    # 4. Control Gimbal if target found
+    # 4. Fallback: If target not found, track the largest person (closest)
+    # This allows anyone to bring the gimbal back to the start
+    if target_box is None and persons:
+        # Find largest person by area
+        best_area = 0
+        best_idx = -1
+        
+        for i, (_, (x1, y1, x2, y2)) in enumerate(persons):
+            area = (x2 - x1) * (y2 - y1)
+            if area > best_area:
+                best_area = area
+                best_idx = i
+        
+        if best_idx != -1:
+            # Use this person as target
+            _, (x1, y1, x2, y2) = persons[best_idx]
+            target_box = (x1, y1, x2, y2)
+            
+            # Visual indication for fallback (only if not already drawn)
+            # We need to find if this person was already drawn as "Unknown"
+            # The previous loop drew everyone, but we might want to highlight the tracked target
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 3) # Yellow for fallback
+            cv2.putText(frame, "Not Current Player", (x1, y1 - 35),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+    # 5. Control Gimbal if target found
     if target_box and app_state.tracker and app_state.tracker.connected:
         cx = (target_box[0] + target_box[2]) // 2
         cy = (target_box[1] + target_box[3]) // 2
