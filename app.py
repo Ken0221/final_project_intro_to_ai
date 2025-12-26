@@ -90,7 +90,7 @@ class AppState:
         # Strike detection when no bottles visible
         self.player_left_time = None  # When player left frame (for no-bottle strike detection)
         self.NO_BOTTLE_STRIKE_TIMEOUT = 5.0  # Seconds to wait before declaring strike (no bottles case)
-        self.BOTTLE_COUNTING_TIMEOUT = 5.0  # Seconds to wait before counting bottles (bottles visible case)
+        self.BOTTLE_COUNTING_TIMEOUT = 3.0  # Seconds to wait before counting bottles (bottles visible case)
         
         # Flag to ensure player is seen before starting next throw
         self.player_seen_after_count = False  # Start false, set true after count, set false when player seen
