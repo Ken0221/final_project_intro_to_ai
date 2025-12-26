@@ -18,10 +18,10 @@ CLASS_MAPPING = {
         'original_classes': ['tennisball'],
         'new_ids': [0]  # tennisball -> 0
     },
-    # 'tennisgame_dataset': {
-    #     'original_classes': ['tennis ball'],
-    #     'new_ids': [0]  # tennisball -> 0 (Same ID as other tennis balls)
-    # },
+    'tennis_custom_dataset': {
+        'original_classes': ['plastic-bottle', 'tennisball'],
+        'new_ids': [1, 0]  # plastic-bottle -> 1, tennisball -> 0
+    },
     'bottle_dataset': {
         'original_classes': ['plastic-bottle'],
         'new_ids': [1]  # plastic-bottle -> 1
@@ -34,7 +34,7 @@ CLASS_MAPPING = {
 
 def merge_datasets():
 
-    output_dir = Path('merged_v2_dataset')
+    output_dir = Path('merged_v4_dataset')
 
     for split in ['train', 'valid']:
         (output_dir / split / 'images').mkdir(parents=True, exist_ok=True)
