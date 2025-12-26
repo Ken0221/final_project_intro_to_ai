@@ -925,7 +925,7 @@ body {
 .toast-container {
     position: fixed;
     bottom: 2rem;
-    right: 2rem;
+    left: 2rem;
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -955,7 +955,7 @@ body {
 
 @keyframes slideIn {
     from {
-        transform: translateX(100%);
+        transform: translateX(-100%);
         opacity: 0;
     }
 
