@@ -719,10 +719,10 @@ function playAgain() {
 
     // Reset registration UI
     [1, 2].forEach(num => {
-        const card = document.getElementById(`player${num} Card`);
-        const status = document.getElementById(`player${num} Status`);
-        const regBtn = document.getElementById(`regPlayer${num} Btn`);
-        const input = document.getElementById(`player${num} Name`);
+        const card = document.getElementById(`player${num}Card`);
+        const status = document.getElementById(`player${num}Status`);
+        const regBtn = document.getElementById(`regPlayer${num}Btn`);
+        const input = document.getElementById(`player${num}Name`);
 
         card.classList.remove('registered');
         status.textContent = '';
@@ -732,8 +732,8 @@ function playAgain() {
 
         // Reset angle buttons and indicators
         ['front', 'back', 'left', 'right'].forEach(angle => {
-            const btn = document.getElementById(`p${num}${capitalize(angle)} Btn`);
-            const ind = document.getElementById(`p${num}Ind${capitalize(angle)} `);
+            const btn = document.getElementById(`p${num}${capitalize(angle)}Btn`);
+            const ind = document.getElementById(`p${num}Ind${capitalize(angle)}`);
             if (btn) {
                 btn.disabled = false;
                 btn.classList.remove('captured');
@@ -745,7 +745,7 @@ function playAgain() {
         });
 
         // Reset registered player dropdown
-        const regSelect = document.getElementById(`player${num} RegisteredSelect`);
+        const regSelect = document.getElementById(`player${num}RegisteredSelect`);
         if (regSelect) regSelect.selectedIndex = 0;
     });
 
