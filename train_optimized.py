@@ -22,8 +22,8 @@ def train_optimized():
         print("Warning: CUDA not found. Training on CPU will be extremely slow.")
 
     # 2. Load model
-    print("Loading YOLO11m...")
-    model = YOLO("yolo11m.pt")
+    print("Loading YOLO11n...")
+    model = YOLO("yolo11n.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
@@ -42,7 +42,7 @@ def train_optimized():
         # Augmentation adjustments
         mosaic=1.0,             # Strong spatial augmentation
         mixup=0.15,             # Mixup to help with generalization
-        scale=0.5,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
+        scale=0.9,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
         box=7.5,                # High box loss gain (focus on accurate bounding boxes)
@@ -52,13 +52,13 @@ def train_optimized():
         lr0=0.001,
         lrf=0.01,
         patience=10,
-        name="yolo11m_highres_balanced_0.99scale",
+        name="yolo11n_highres_balanced_0.9scale_v5",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/yolo11n_highres_balanced/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/yolo11n_highres_balanced_0.9scale_v5/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows
