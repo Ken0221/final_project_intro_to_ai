@@ -37,7 +37,11 @@
     box-sizing: border-box;
 }
 
-/* #app container to handle main layout */
+
+html {
+    height: 100%;
+}
+
 /* #app container to handle main layout */
 #app {
     display: flex;
@@ -252,6 +256,22 @@ body {
     justify-content: flex-start;
     /* Extra padding at bottom to ensure submit button is visible when scrolled */
     padding-bottom: 4rem;
+}
+
+/* Specific override for Registration screen: FIXED VIEWPORT, no global scroll */
+#registrationScreen.active {
+    overflow: hidden;
+    /* Prevent page scroll */
+    height: 100%;
+    max-height: 100%;
+    /* Force fit */
+    min-height: 0;
+    /* Allow shrinking in flex */
+    display: flex;
+    flex-direction: column;
+    /* Fill parent Flex */
+    padding-bottom: 0;
+    /* Remove padding to avoid overflow */
 }
 
 @keyframes fadeIn {
@@ -619,6 +639,46 @@ body {
     border: 3px solid var(--accent);
 }
 
+/* Wrong Player Overlay */
+.wrong-player-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(239, 68, 68, 0.95);
+    /* Red warning */
+    color: white;
+    padding: 2rem 3rem;
+    border-radius: var(--radius-lg);
+    font-size: 2.5rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+    z-index: 1000;
+    border: 4px solid white;
+    animation: warningPulse 1s infinite;
+    pointer-events: none;
+    /* Let clicks pass through */
+}
+
+@keyframes warningPulse {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.95;
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.05);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.95;
+    }
+}
+
 #countdownNumber {
     font-size: 3rem;
     font-weight: 700;
@@ -798,6 +858,134 @@ body {
     border-color: var(--success);
     color: var(--success);
     background: rgba(16, 185, 129, 0.1);
+}
+
+/* ==========================================
+   Manage Saves Modal & Registration Panel
+   ========================================== */
+
+/* Registration Panel Header */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.panel-header h2 {
+    margin-bottom: 0;
+    /* Remove default margin to align with button */
+    font-size: 1.25rem;
+    /* Slightly smaller to fit */
+}
+
+/* Modal Enhancements */
+.large-modal {
+    width: 600px;
+    /* Wider than default */
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    /* Custom padding for header/footer layout */
+}
+
+.modal-header {
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: var(--text-primary);
+}
+
+.save-list-container {
+    padding: 1.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Save List Table */
+.save-list-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.save-list-table th,
+.save-list-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.save-list-table th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.save-list-table tr:hover td {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.save-list-table input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+}
+
+/* Modal Footer */
+.modal-footer {
+    padding: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.selection-count {
+    margin-right: auto;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Danger Button */
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid #ef4444;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: var(--border-color);
+    color: var(--text-muted);
+    background: transparent;
 }
 
 /* Camera Control D-Pad */

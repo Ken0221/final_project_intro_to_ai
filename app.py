@@ -16,6 +16,8 @@ import base64
 import argparse
 import time
 import threading
+import os
+import datetime
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 
@@ -111,7 +113,6 @@ def index():
 @app.route('/api/registered_players')
 def get_registered_players():
     """Get list of registered players from player_db folder"""
-    import os
     players = []
     db_path = 'player_db'
     if os.path.exists(db_path):
@@ -120,6 +121,74 @@ def get_registered_players():
                 player_name = os.path.splitext(filename)[0]
                 players.append(player_name)
     return jsonify({'players': sorted(players)})
+
+@app.route('/api/detailed_players')
+def get_detailed_players():
+    """Get list of players with creation time"""
+    players = []
+    db_path = 'player_db'
+    if os.path.exists(db_path):
+        for filename in os.listdir(db_path):
+            if filename.endswith('.npy'):
+                player_name = os.path.splitext(filename)[0]
+                file_path = os.path.join(db_path, filename)
+                # Get creation time (or modification time if creation not available)
+                timestamp = os.path.getctime(file_path)
+                date_str = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                
+                players.append({
+                    'name': player_name,
+                    'created_at': date_str,
+                    'filename': filename
+                })
+    
+    # Sort by creation time (newest first)
+    players.sort(key=lambda x: x['created_at'], reverse=True)
+    return jsonify({'players': players})
+
+@app.route('/api/delete_players', methods=['POST'])
+def delete_players():
+    """Delete selected player save files"""
+    data = request.json
+    player_names = data.get('names', [])
+    deleted = []
+    errors = []
+    
+    db_path = 'player_db'
+    if not os.path.exists(db_path):
+        return jsonify({'success': False, 'message': 'Database directory not found'})
+        
+    for name in player_names:
+        # Basic sanitization to prevent directory traversal
+        if '..' in name or '/' in name or '\\' in name:
+            errors.append(f"Invalid name: {name}")
+            continue
+            
+        filename = f"{name}.npy"
+        file_path = os.path.join(db_path, filename)
+        
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted.append(name)
+                
+                # Also remove from current ReID know_players if loaded
+                if app_state.reid and name in app_state.reid.known_players:
+                    # Thread-safe removal might be needed but for now direct removal
+                    del app_state.reid.known_players[name]
+                    # Note: We aren't removing features from the index list efficiently here yet
+                    # but since known_players dictionary is the primary lookup, this is okay for now.
+                    # A proper reload might be better but expensive.
+            else:
+                errors.append(f"File not found: {filename}")
+        except Exception as e:
+            errors.append(f"Error deleting {name}: {str(e)}")
+            
+    return jsonify({
+        'success': True,
+        'deleted': deleted,
+        'errors': errors
+    })
 
 # ==========================================
 # SocketIO Events
@@ -737,7 +806,47 @@ def track_player(frame, results, target_player_name):
     else:
         app_state.ball_visible_count = 0
     
+    # --- Wrong Player Warning Check (Overlap Logic) ---
+    warning_triggered = False
+    
+    # Get ball box if found
+    ball_box = None
+    for cls, box, _ in all_objects:
+        if cls.lower() == 'tennis_ball':
+            ball_box = box
+            break
+            
+    if ball_box is not None:
+        # Check overlap with any person
+        for idx, (box_coords, _) in enumerate(person_data):
+            if boxes_overlap(ball_box, box_coords):
+                # Person overlaps ball. Identify them.
+                person_name = "Unknown"
+                if idx in final_assignments:
+                    person_name, _ = final_assignments[idx]
+                
+                # Verify if it's the target player
+                if person_name != target_player_name:
+                    # Wrong player touching the ball!
+                    socketio.emit('wrong_player_warning', {'show': True, 'message': 'WRONG PLAYER!'})
+                    warning_triggered = True
+                break # trigger on first interference
+    
+    if not warning_triggered:
+        socketio.emit('wrong_player_warning', {'show': False})
+    
     return frame
+
+def boxes_overlap(box1, box2):
+    """Check if two bounding boxes overlap"""
+    x1_1, y1_1, x2_1, y2_1 = box1
+    x1_2, y1_2, x2_2, y2_2 = box2
+    
+    if x2_1 < x1_2 or x2_2 < x1_1:
+        return False
+    if y2_1 < y1_2 or y2_2 < y1_1:
+        return False
+    return True
 
 def track_ball(frame, results):
     """Track the ball and detect strikes (including when all bottles knocked down)"""
@@ -769,8 +878,46 @@ def track_ball(frame, results):
         app_state.bottles_visible_count = 0
         cv2.putText(frame, "Player in frame - waiting...", (50, 50),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+        
+        # --- Wrong Player Check for track_ball ---
+        # If ball is found and player is visible, check overlap
+        # We need ball box. 'result' from camera_track has 'box' if found.
+        if result['found'] and result['box']:
+            ball_box = result['box']
+            current_player = gm.get_current_player()
+            warning_triggered = False
+            
+            if current_player:
+                for crop, (px1, py1, px2, py2) in persons:
+                    person_box = (px1, py1, px2, py2)
+                    if boxes_overlap(ball_box, person_box):
+                        # Overlap detected! Identify this person.
+                        # We only identify the overlapping person to save compute
+                        _, _, scores_dict = app_state.reid.identify_player(crop, threshold=0.55)
+                        
+                        identified_name = "Unknown"
+                        # Find best match
+                        best_score = 0
+                        for p_name, p_vals in scores_dict.items():
+                            if p_vals['combined'] > 0.55 and p_vals['combined'] > best_score:
+                                best_score = p_vals['combined']
+                                identified_name = p_name
+                        
+                        # Check name
+                        if identified_name != current_player.name:
+                             socketio.emit('wrong_player_warning', {'show': True, 'message': 'WRONG PLAYER!'})
+                             warning_triggered = True
+                             cv2.rectangle(frame, (px1, py1), (px2, py2), (0, 0, 255), 3) # Alert box
+                        break # Trigger on first
+            
+            if not warning_triggered:
+                socketio.emit('wrong_player_warning', {'show': False})
+        else:
+             socketio.emit('wrong_player_warning', {'show': False})
+
     else:
         # Player has left frame - start timing
+        socketio.emit('wrong_player_warning', {'show': False}) # Ensure warning matches state
         if app_state.player_left_time is None:
             app_state.player_left_time = time.time()
         

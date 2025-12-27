@@ -90,7 +90,11 @@
                     </div>
                 </div>
                 <div class="registration-panel">
-                    <h2>👥 Player Registration</h2>
+                    <div class="panel-header">
+                        <h2>Player Registration</h2>
+                        <button class="btn btn-outline btn-sm" id="manageSavesBtn" title="Manage saved players">📂
+                            Manage Saves</button>
+                    </div>
 
                     <!-- Camera Control -->
                     <div class="camera-control-card">
@@ -285,6 +289,11 @@
                     <div class="countdown-overlay" id="countdownOverlay" style="display: none;">
                         <span id="countdownNumber">3</span>
                     </div>
+
+                    <!-- Wrong Player Overlay -->
+                    <div class="wrong-player-overlay" id="wrongPlayerOverlay" style="display: none;">
+                        ⚠️ WRONG PLAYER!
+                    </div>
                 </div>
             </div>
         </section>
@@ -315,6 +324,35 @@
                 <div class="modal-buttons">
                     <button class="btn btn-outline" id="cancelCorrectionBtn">Cancel</button>
                     <button class="btn btn-primary" id="confirmCorrectionBtn">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage Saves Modal -->
+        <div class="modal" id="manageSavesModal">
+            <div class="modal-content large-modal">
+                <div class="modal-header">
+                    <h3>📂 Manage Player Saves</h3>
+                    <button class="close-btn" id="closeManageSavesBtn">&times;</button>
+                </div>
+                <div class="save-list-container">
+                    <table class="save-list-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllSaves">
+                                </th>
+                                <th>Player Name</th>
+                                <th>Created/Modified</th>
+                            </tr>
+                        </thead>
+                        <tbody id="saveListBody">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <span id="selectedCount" class="selection-count">0 selected</span>
+                    <button class="btn btn-danger" id="deleteSelectedSavesBtn" disabled>🗑️ Delete Selected</button>
                 </div>
             </div>
         </div>
