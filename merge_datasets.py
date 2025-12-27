@@ -24,7 +24,7 @@ CLASS_MAPPING = {
     },
     'tennis_custom_2_dataset': {
         'original_classes': ['tennisball', 'plastic-bottle', 'person'],
-        'new_ids': [0, 1, 2]  # plastic-bottle -> 1, tennisball -> 0
+        'new_ids': [2, 1, 0]  # person(0)->2, bottle(1)->1, tennis(2)->0
     },
     'bottle_dataset': {
         'original_classes': ['plastic-bottle'],
