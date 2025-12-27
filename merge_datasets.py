@@ -14,27 +14,31 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 CLASS_MAPPING = {
-    'tennis_dataset': {
-        'original_classes': ['tennisball'],
-        'new_ids': [0]  # tennisball -> 0
+    'merged_dataset': {
+        'original_classes': ['tennisball', 'plastic-bottle', 'person'],
+        'new_ids': [0, 1, 2]  # tennisball -> 0, plastic-bottle -> 1, person -> 2
     },
-    # 'tennisgame_dataset': {
-    #     'original_classes': ['tennis ball'],
-    #     'new_ids': [0]  # tennisball -> 0 (Same ID as other tennis balls)
+    # 'tennis_dataset': {
+    #     'original_classes': ['tennisball'],
+    #     'new_ids': [0]  # tennisball -> 0
     # },
-    'bottle_dataset': {
-        'original_classes': ['plastic-bottle'],
-        'new_ids': [1]  # plastic-bottle -> 1
+    'tennis_custom_dataset': {
+        'original_classes': ['plastic-bottle', 'tennisball'],
+        'new_ids': [1, 0]  # plastic-bottle -> 1, tennisball -> 0
     },
-    'human_dataset': {
-        'original_classes': ['Human', 'Human '],  # 注意有两个类别,都映射为 person
-        'new_ids': [2, 2]  # Human -> 2, Human  -> 2
-    }
+    # 'bottle_dataset': {
+    #     'original_classes': ['plastic-bottle'],
+    #     'new_ids': [1]  # plastic-bottle -> 1
+    # },
+    # 'human_dataset': {
+    #     'original_classes': ['Human', 'Human '],  # 注意有两个类别,都映射为 person
+    #     'new_ids': [2, 2]  # Human -> 2, Human  -> 2
+    # }
 }
 
 def merge_datasets():
 
-    output_dir = Path('merged_v2_dataset')
+    output_dir = Path('merged_v5_dataset')
 
     for split in ['train', 'valid']:
         (output_dir / split / 'images').mkdir(parents=True, exist_ok=True)

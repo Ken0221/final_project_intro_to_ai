@@ -8,7 +8,7 @@ def train_optimized():
     Optimized for Windows and stability.
     """
     # 1. Dataset config
-    dataset_yaml = "merged_v2_dataset/data.yaml"
+    dataset_yaml = "merged_v5_dataset/data.yaml"
     
     if not os.path.exists(dataset_yaml):
         print(f"Error: {dataset_yaml} not found.")
@@ -42,7 +42,7 @@ def train_optimized():
         # Augmentation adjustments
         mosaic=1.0,             # Strong spatial augmentation
         mixup=0.15,             # Mixup to help with generalization
-        scale=0.99,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
+        scale=0.5,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
         box=7.5,                # High box loss gain (focus on accurate bounding boxes)

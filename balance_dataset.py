@@ -8,7 +8,7 @@ def balance_dataset(target_count=4000):
     """
     Balances the merged datasets by upsampling (duplicating) rare classes.
     """
-    base_dir = Path("merged_v2_dataset")
+    base_dir = Path("merged_v5_dataset")
     train_dir = base_dir / "train"
     
     if not train_dir.exists():
@@ -110,4 +110,4 @@ def balance_dataset(target_count=4000):
     print("\nBalancing Complete!")
     
 if __name__ == "__main__":
-    balance_dataset(target_count=4000)
+    balance_dataset(target_count=2000)
