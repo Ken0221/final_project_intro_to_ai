@@ -58,6 +58,8 @@ class AppState:
         # hyperparameter
         self.conf = 0.25
         self.iou = 0.55
+        self.manual_pan_speed = 23
+        self.manual_tilt_step = 2
         
         # Current frame data
         self.current_frame = None
@@ -128,6 +130,8 @@ def handle_connect():
     """Handle client connection"""
     print(f"Client connected: {request.sid}")
     emit('game_state', app_state.game_manager.get_game_state_dict())
+    emit('arduino_status', {'connected': app_state.tracker.connected if app_state.tracker else False})
+    emit('temporal_smoothing_status', {'enabled': app_state.temporal_smoothing_enabled})
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -345,6 +349,69 @@ def handle_toggle_temporal_smoothing():
     print(f"Temporal Smoothing: {status}")
     emit('temporal_smoothing_status', {'enabled': app_state.temporal_smoothing_enabled})
 
+@socketio.on('manual_motor_control')
+def handle_manual_motor_control(data):
+    """
+    Handle manual motor control command.
+    data: {'action': 'move', 'axis': 'pan'|'tilt', 'direction': -1|0|1, 'stop': bool}
+    """
+    if not app_state.tracker or not app_state.tracker.connected:
+        return
+
+    axis = data.get('axis')
+    stop = data.get('stop', False)
+    direction = data.get('direction', 0)
+    
+    # 1. Handle Pan (Continuous Servo)
+    if axis == 'pan':
+        if stop:
+            speed = 90 # Stop
+        else:
+            # direction: -1 (Left), 1 (Right)
+            # Pan Speed: <90 Left, >90 Right
+            # Apply manual speed deviation
+            deviation = app_state.manual_pan_speed
+            # Since screen see the direction opposite to the actual direction
+            if direction < 0:
+                speed = 90 + deviation
+            else:
+                speed = 90 - deviation
+        # Send Pan Command (Start or Stop)
+        # We need to maintain current tilt angle
+        app_state.tracker._send_command(speed, app_state.tracker.current_tilt_angle)
+        # print(f"Pan Speed: {speed}")
+            
+    # 2. Handle Tilt (Positional Servo)
+    elif axis == 'tilt':
+        # For tilt, we step up/down on click (or repeat if held on frontend)
+        # We process single step here
+        step = app_state.manual_tilt_step
+        current = app_state.tracker.current_tilt_angle
+        
+        if direction > 0: # Up (Angle Decrease? Check arduino_control: error_y > 0 -> decrease)
+             # Wait, usually 90 is center. 0 is up or down?
+             # check _calculate_tilt_angle: 
+             # if error_y > 0 (object above center) -> new_angle = current - step (Tilt UP)
+             # So Decrease Angle = Look Up
+             new_angle = current - step
+        else:
+            new_angle = current + step
+            
+        # Send Tilt Command
+        # Pan should stay stopped (90) or whatever it was? 
+        # Safest is to keep pan stopped during manual tilt adjust unless moving?
+        # Let's keep pan at 90 (Stop) to avoid accidental spin while tilting
+        app_state.tracker._send_command(90, new_angle)
+        
+        # Update tracker state locally since valid command sent
+        # (The _send_command doesn't update self.current_tilt_angle automatically? 
+        # Wait, look at _send_command implementation... it DOES update self.last_tilt_angle
+        # BUT self.current_tilt_angle is a separate state variable. 
+        # In camera_track it updates self.current_tilt_angle.
+        # We should update it here too to avoid snap back.)
+        app_state.tracker.current_tilt_angle = max(app_state.tracker.tilt_min, min(app_state.tracker.tilt_max, new_angle))
+
+
 # ==========================================
 # Video Processing
 # ==========================================
@@ -413,6 +480,14 @@ def initialize_components(force_reload=False):
     # Share YOLO detector (update reference if reloaded)
     app_state.tracker._detector = app_state.yolo
     app_state.tracker.update_frame_size(actual_width, actual_height)
+    
+    # Connect to Arduino if not connected (for manual control during registration)
+    # Connect to Arduino if not connected (for manual control during registration)
+    if not app_state.tracker.connected:
+        app_state.tracker.connect()
+        # Notify clients about connection status
+        socketio.emit('arduino_status', {'connected': app_state.tracker.connected})
+
     
     print("Components initialized!")
 

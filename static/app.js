@@ -138,6 +138,81 @@ function initializeEventListeners() {
 
     // Results screen
     document.getElementById('playAgainBtn').addEventListener('click', playAgain);
+
+    // Camera Control (Manual)
+    setupCameraControl('btnPanLeft', 'pan', -1);
+    setupCameraControl('btnPanRight', 'pan', 1);
+    setupCameraControl('btnTiltUp', 'tilt', 1); // Up button -> Angle Decrease (Look Up) = direction 1 (positive logic for button, app handles sign)
+    setupCameraControl('btnTiltDown', 'tilt', -1); // Down button -> Angle Increase (Look Down)
+}
+
+function setupCameraControl(btnId, axis, direction) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    // Helper to send command
+    const sendCmd = (stop = false) => {
+        state.socket.emit('manual_motor_control', {
+            axis: axis,
+            direction: direction,
+            stop: stop
+        });
+    };
+
+    if (axis === 'pan') {
+        // Pan: Hold to move (start on down, stop on up)
+        const startMove = (e) => {
+            e.preventDefault(); // Prevent text selection/scrolling
+            sendCmd(false);
+        };
+        const stopMove = (e) => {
+            e.preventDefault();
+            sendCmd(true);
+        };
+
+        btn.addEventListener('mousedown', startMove);
+        btn.addEventListener('touchstart', startMove);
+
+        // Stop on release or leaving button
+        btn.addEventListener('mouseup', stopMove);
+        btn.addEventListener('mouseleave', stopMove);
+        btn.addEventListener('touchend', stopMove);
+    } else {
+        // Tilt: Hold to move (start on down, stop on up) -> Repeat steps
+        let intervalId = null;
+
+        const startMove = (e) => {
+            e.preventDefault();
+            if (intervalId) return;
+
+            sendCmd(false); // Send immediate first step
+            intervalId = setInterval(() => sendCmd(false), 100); // Repeat every 100ms
+        };
+
+        const stopMove = (e) => {
+            e.preventDefault();
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            // For tilt, "Stop" command isn't strictly needed as it's positional step, 
+            // but harmless to stop interval. We don't need to send a "Stop" command to backend 
+            // because backend doesn't have "Tilt Speed", only "Tilt Angle".
+            // But let's verify if `sendCmd(true)` does anything for tilt.
+            // Backend `handle_manual_motor_control`: 
+            // `stop = data.get('stop')` 
+            // For tilt, `stop` is currently ignored in backend logic I wrote?
+            // Actually, looking at `app.py`: `stop` is used for Pan. For Tilt, it just steps.
+            // So we just stop the interval.
+        };
+
+        btn.addEventListener('mousedown', startMove);
+        btn.addEventListener('touchstart', startMove);
+
+        btn.addEventListener('mouseup', stopMove);
+        btn.addEventListener('mouseleave', stopMove);
+        btn.addEventListener('touchend', stopMove);
+    }
 }
 
 // ==========================================

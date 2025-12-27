@@ -72,6 +72,7 @@
                     <label for="numFrames">Number of Frames: <span id="framesValue">10</span></label>
                     <input type="range" id="numFrames" min="1" max="20" value="10">
                 </div>
+
                 <button class="btn btn-primary btn-large" id="startSetupBtn">
                     Start Setup →
                 </button>
@@ -89,6 +90,33 @@
                 </div>
                 <div class="registration-panel">
                     <h2>👥 Player Registration</h2>
+
+                    <!-- Camera Control -->
+                    <div class="camera-control-card">
+                        <h3>🎥 Camera Control</h3>
+                        <div class="dpad-grid">
+                            <div class="dpad-cell"></div>
+                            <div class="dpad-cell">
+                                <button class="btn btn-control" id="btnTiltUp">▲</button>
+                            </div>
+                            <div class="dpad-cell"></div>
+
+                            <div class="dpad-cell">
+                                <button class="btn btn-control" id="btnPanLeft">◀</button>
+                            </div>
+                            <div class="dpad-cell center-dot"></div>
+                            <div class="dpad-cell">
+                                <button class="btn btn-control" id="btnPanRight">▶</button>
+                            </div>
+
+                            <div class="dpad-cell"></div>
+                            <div class="dpad-cell">
+                                <button class="btn btn-control" id="btnTiltDown">▼</button>
+                            </div>
+                            <div class="dpad-cell"></div>
+                        </div>
+                        <div class="control-hint">Hold to Move (Pan) | Click to Step (Tilt)</div>
+                    </div>
 
                     <!-- Player 1 Card -->
                     <div class="player-reg-card" id="player1Card">
