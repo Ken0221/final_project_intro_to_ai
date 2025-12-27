@@ -31,7 +31,7 @@ def train_optimized():
     
     model.train(
         data=dataset_yaml,
-        epochs=10,
+        epochs=20,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
@@ -46,13 +46,16 @@ def train_optimized():
         # scale=0.5,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
-        box=5.0,                # High box loss gain (focus on accurate bounding boxes)
-        cls=2.5,
+        # box=7.5,                # High box loss gain (focus on accurate bounding boxes)
+        # cls=0.5,
+        box=6,                # High box loss gain (focus on accurate bounding boxes)
+        cls=1,
         
         # Training mechanics
         # lr0=0.001,
         lr0=0.0005,
-        lrf=0.01,
+        # lrf=0.01,
+        lrf=0.05,
         patience=10,
         name="yolo11n_balanced_v6_scaled_large_human_custom2",
         save=True,
