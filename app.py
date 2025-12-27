@@ -83,7 +83,7 @@ class AppState:
         self.debug_mode = False
         
         # Temporal Smoothing for bottle counting
-        self.temporal_smoothing_enabled = True  # Default enabled
+        self.temporal_smoothing_enabled = False  # Default disabled
         self.bottle_count_history = []  # Rolling window of bottle counts
         self.TEMPORAL_SMOOTHING_WINDOW = 5  # Number of frames to consider
         
