@@ -41,9 +41,10 @@ def process_dataset(input_dir, output_dir, target_count=2000):
     SCALE_RANGES = {
         0: (0.1, 0.7),  # Tennis (Original) -> Small (Simulate far)
         1: (0.1, 0.7),  # Bottle (Original) -> Small
-        2: (0.8, 1.0),  # Person -> keep mostly original
-        3: (0.7, 1.0),  # Bottle (Custom) -> Mild scaling
-        4: (0.7, 1.0)   # Tennis (Custom) -> Mild scaling
+        2: (0.7, 1.0),  # Person -> keep mostly original
+        3: (0.8, 1.0),  # Bottle (Custom) -> Mild scaling
+        4: (0.8, 1.0),  # Tennis (Custom) -> Mild scaling
+        5: (0.8, 1.0)   # Person (Custom) -> Mild scaling
     }
     
     # Define Class Remapping
@@ -52,8 +53,9 @@ def process_dataset(input_dir, output_dir, target_count=2000):
         0: 0, # Tennis -> Tennis
         1: 1, # Bottle -> Bottle
         2: 2, # Person -> Person
-        3: 1, # Bottle (Custom) -> Bottle
-        4: 0  # Tennis (Custom) -> Tennis
+        3: 0, # Tennis (Custom) -> Tennis
+        4: 1, # Bottle (Custom) -> Bottle
+        5: 2  # Person (Custom) -> Person
     }
 
     # Group inputs by TARGET class for balancing

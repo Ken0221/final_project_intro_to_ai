@@ -23,15 +23,15 @@ def train_optimized():
 
     # 2. Load model
     print("Loading YOLO11n...")
-    model = YOLO("yolo11n.pt")
-    # model = YOLO("merged_v3.pt")
+    # model = YOLO("yolo11n.pt")
+    model = YOLO("merged_v5.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
     
     model.train(
         data=dataset_yaml,
-        epochs=50,
+        epochs=10,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
@@ -48,22 +48,22 @@ def train_optimized():
         # Loss adjustments
         box=7.5,                # High box loss gain (focus on accurate bounding boxes)
         cls=0.5,
-        # box=6,                # High box loss gain (focus on accurate bounding boxes)
+        # box=7.5,                # High box loss gain (focus on accurate bounding boxes)
         # cls=1,
         
         # Training mechanics
-        lr0=0.001,
-        # lr0=0.0005,
-        lrf=0.01,
-        # lrf=0.05,
+        # lr0=0.001,
+        lr0=0.0005,
+        # lrf=0.01,
+        lrf=0.05,
         patience=10,
-        name="yolo11n_balanced_v6_scaled_large_human_custom2",
+        name="merged_v5_balanced_v6_scaled_large_human_custom2",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/yolo11n_balanced_v6_scaled_large_human_custom2/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/merged_v5_balanced_v6_scaled_large_human_custom2/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows
