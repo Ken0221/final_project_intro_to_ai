@@ -22,7 +22,7 @@ ENV/
 .env
 
 # Dataset
-*_dataset/
+*dataset*/
 
 # training results
 runs/
