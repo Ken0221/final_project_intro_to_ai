@@ -48,4 +48,4 @@ README.roboflow.txt
 *.pt
 !yolo11n.pt
 !best.pt
-!merged_v*.pt
+!merged_*.pt
