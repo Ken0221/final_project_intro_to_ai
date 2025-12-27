@@ -145,23 +145,65 @@ def process_dataset(input_dir, output_dir, target_count=2000):
         loop_count_target = target_count if split == 'train' else 0 # 0 means process all exactly once
         
         if split == 'train':
-            print(f"\nGeneratng TRAINING Data (Target: {target_count} per class)...")
+            print(f"\nGeneratng TRAINING Data (Scaled & Balanced)...")
+            
+            # Handle target_count input
+            if isinstance(target_count, int):
+                target_counts = {0: target_count, 1: target_count, 2: target_count}
+            else:
+                target_counts = target_count
+
             for tid in [0, 1, 2]:
                 sources = split_sources[tid]
-                if not sources: continue
-                for i in tqdm(range(target_count), desc=f"Class {tid}"):
+                t_count = target_counts.get(tid, 2000)
+                
+                if not sources: 
+                    print(f"  Warning: No sources for class {tid}")
+                    continue
+                    
+                print(f"  Class {tid}: Generating {t_count} samples...")
+                for i in tqdm(range(t_count), desc=f"Class {tid}"):
                     src = random.choice(sources) # Random w/ replacement
                     process_single_image(src, i, out_images_dir, out_labels_dir, SCALE_RANGES, CLASS_REMAP, True)
         else:
-            print(f"\nProcessing VALIDATION Data (Original counts)...")
+            print(f"\nProcessing {split.upper()} Data (Copy & Remap only)...")
             for tid in [0, 1, 2]:
                 sources = split_sources[tid]
                 if not sources: continue
-                for i, src in enumerate(tqdm(sources, desc=f"Class {tid}")):
-                     # No random scaling for valid? Or consistency? 
-                     # Probably stick to mild scaling or original for validation to test robustness, 
-                     # OR just resize. Let's apply random scaling too to check 'Zoom Out' performance.
-                     process_single_image(src, i, out_images_dir, out_labels_dir, SCALE_RANGES, CLASS_REMAP, True)
+                # Unique original filenames are sufficient for Valid/Test (no sampling with replacement)
+                for src_tuple in tqdm(sources, desc=f"Class {tid}"):
+                    src_img_path, src_lbl_path, src_cls_id = src_tuple
+                    
+                    # 1. Copy Image (Preserve original)
+                    dest_img_path = out_images_dir / src_img_path.name
+                    shutil.copy2(src_img_path, dest_img_path)
+                    
+                    # 2. Remap Label
+                    if not src_lbl_path.exists(): continue
+                    
+                    with open(src_lbl_path, 'r') as f: 
+                        lines = f.readlines()
+                    
+                    new_lines = []
+                    for line in lines:
+                        parts = line.strip().split()
+                        if not parts: continue
+                        
+                        try:
+                            cls_id = int(parts[0])
+                            
+                            # Remap class (e.g. 3->1, 4->0)
+                            new_cls_id = CLASS_REMAP.get(cls_id, cls_id)
+                            
+                            # Reconstruct line with new class ID
+                            # Keep original coordinates
+                            new_line = f"{new_cls_id} " + " ".join(parts[1:]) + "\n"
+                            new_lines.append(new_line)
+                        except ValueError:
+                            continue
+                        
+                    with open(out_labels_dir / src_lbl_path.name, 'w') as f:
+                        f.writelines(new_lines)
 
     # Generate data.yaml
     data_yaml_content = f"""train: ../train/images
@@ -251,4 +293,10 @@ if __name__ == "__main__":
     else:
         # We will output to merged_v6_dataset_scaled to keep original for comparison/debugging
         # or we can overwrite. Let's create a new one to be safe.
-        process_dataset("merged_v6_dataset", "merged_v6_dataset_scaled", target_count=2000)
+        # Example usage with custom counts
+        target_counts = {
+            0: 2000, # Tennis
+            1: 2000, # Bottle
+            2: 2000  # Person
+        }
+        process_dataset("merged_v6_dataset", "merged_v6_dataset_scaled", target_count=target_counts)

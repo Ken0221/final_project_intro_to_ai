@@ -14,26 +14,30 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 CLASS_MAPPING = {
-    'merged_dataset': {
+    # 'merged_dataset': {
+    #     'original_classes': ['tennisball', 'plastic-bottle', 'person'],
+    #     'new_ids': [0, 1, 2]  # tennisball -> 0, plastic-bottle -> 1, person -> 2
+    # },
+    'tennis_dataset': {
+        'original_classes': ['tennisball'],
+        'new_ids': [0]  # tennisball -> 0
+    },
+    'tennis_custom_2_dataset': {
         'original_classes': ['tennisball', 'plastic-bottle', 'person'],
-        'new_ids': [0, 1, 2]  # tennisball -> 0, plastic-bottle -> 1, person -> 2
+        'new_ids': [0, 1, 2]  # plastic-bottle -> 1, tennisball -> 0
     },
-    # 'tennis_dataset': {
-    #     'original_classes': ['tennisball'],
-    #     'new_ids': [0]  # tennisball -> 0
-    # },
-    'tennis_custom_dataset': {
-        'original_classes': ['plastic-bottle', 'tennisball'],
-        'new_ids': [3, 4]  # plastic-bottle -> 3, tennisball -> 4
+    'bottle_dataset': {
+        'original_classes': ['plastic-bottle'],
+        'new_ids': [1]  # plastic-bottle -> 1
     },
-    # 'bottle_dataset': {
-    #     'original_classes': ['plastic-bottle'],
-    #     'new_ids': [1]  # plastic-bottle -> 1
-    # },
     # 'human_dataset': {
     #     'original_classes': ['Human', 'Human '],  # 注意有两个类别,都映射为 person
     #     'new_ids': [2, 2]  # Human -> 2, Human  -> 2
     # }
+    'human_large_dataset': {
+        'original_classes': ['Human', 'Human '],  # 注意有两个类别,都映射为 person
+        'new_ids': [2, 2]  # Human -> 2, Human  -> 2
+    }
 }
 
 def merge_datasets():

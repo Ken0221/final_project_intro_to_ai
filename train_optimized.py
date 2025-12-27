@@ -24,7 +24,7 @@ def train_optimized():
     # 2. Load model
     print("Loading YOLO11n...")
     # model = YOLO("yolo11n.pt")
-    model = YOLO("merged_v5.pt")
+    model = YOLO("merged_v3.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
@@ -46,20 +46,21 @@ def train_optimized():
         # scale=0.5,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
-        box=7.5,                # High box loss gain (focus on accurate bounding boxes)
-        cls=0.5,
+        box=5.0,                # High box loss gain (focus on accurate bounding boxes)
+        cls=2.5,
         
         # Training mechanics
-        lr0=0.001,
+        # lr0=0.001,
+        lr0=0.0005,
         lrf=0.01,
         patience=10,
-        name="yolo11n_highres_balanced_v6_scaled",
+        name="yolo11n_balanced_v6_scaled_large_human_custom2",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/yolo11n_highres_balanced_v6_scaled/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/yolo11n_balanced_v6_scaled_large_human_custom2/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows

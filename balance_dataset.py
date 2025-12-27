@@ -7,6 +7,7 @@ from tqdm import tqdm
 def balance_dataset(target_count=4000):
     """
     Balances the merged datasets by upsampling (duplicating) rare classes.
+    target_count: int (applied to all) or dict {class_id: count}
     """
     base_dir = Path("merged_v5_dataset")
     train_dir = base_dir / "train"
@@ -15,8 +16,6 @@ def balance_dataset(target_count=4000):
         print(f"Error: {train_dir} not found. Please run merge_datasets.py first.")
         return
 
-    print(" Analyzing class distribution...")
-    
     print(" Analyzing class distribution...")
     
     # Analyze current distribution
@@ -59,19 +58,26 @@ def balance_dataset(target_count=4000):
     print(f"  Class 1 (Bottle):      {class_counts[1]}")
     print(f"  Class 2 (Person):      {class_counts[2]}")
     
+    # Handle target_count input
+    if isinstance(target_count, int):
+        target_counts = {0: target_count, 1: target_count, 2: target_count}
+    else:
+        target_counts = target_count
+
     target_classes = [0, 1, 2] # Process ALL classes
     
     for cls in target_classes:
         current_count = class_counts[cls]
+        target = target_counts.get(cls, 4000)
         
-        if current_count == target_count:
+        if current_count == target:
             print(f"Class {cls} count ({current_count}) is perfect.")
             continue
             
-        if current_count < target_count:
+        if current_count < target:
             # UPSAMPLE
-            needed = target_count - current_count
-            print(f"\n Upsampling Class {cls}: Need {needed} more images...")
+            needed = target - current_count
+            print(f"\n Upsampling Class {cls}: Need {needed} more images (Target: {target})...")
             
             candidates = [img for img, c in file_class_map.items() if c == cls]
             
@@ -91,23 +97,26 @@ def balance_dataset(target_count=4000):
                 if src_label.exists():
                     shutil.copy2(src_label, dst_label)
                     
-        elif current_count > target_count:
+        elif current_count > target:
             # DOWNSAMPLE
-            needed_to_remove = current_count - target_count
-            print(f"\n Downsampling Class {cls}: Removing {needed_to_remove} images...")
+            needed_to_remove = current_count - target
+            print(f"\n Downsampling Class {cls}: Removing {needed_to_remove} images (Target: {target})...")
             
             candidates = [img for img, c in file_class_map.items() if c == cls]
             to_remove = random.sample(candidates, needed_to_remove)
             
             for img in tqdm(to_remove, desc=f"Removing Class {cls}"):
                 # Remove image
-                img.unlink()
-                # Remove label
-                lbl = train_dir / "labels" / f"{img.stem}.txt"
-                if lbl.exists():
-                    lbl.unlink()
+                try:
+                    img.unlink()
+                    lbl = train_dir / "labels" / f"{img.stem}.txt"
+                    if lbl.exists():
+                        lbl.unlink()
+                except Exception as e:
+                    print(f"Error removing {img}: {e}")
 
     print("\nBalancing Complete!")
     
 if __name__ == "__main__":
-    balance_dataset(target_count=2000)
+    # Example usage with dict
+    balance_dataset(target_count={0: 2000, 1: 2000, 2: 2000})
