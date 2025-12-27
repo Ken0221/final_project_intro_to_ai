@@ -30,7 +30,7 @@ def scale_image(img, scale):
     
     return canvas, x_offset, y_offset, new_w, new_h
 
-def process_dataset(input_dir, output_dir, target_count=3000):
+def process_dataset(input_dir, output_dir, target_count=2000):
     """
     Applies scaling and class remapping to the dataset, balancing the count of each class.
     """
@@ -251,4 +251,4 @@ if __name__ == "__main__":
     else:
         # We will output to merged_v6_dataset_scaled to keep original for comparison/debugging
         # or we can overwrite. Let's create a new one to be safe.
-        process_dataset("merged_v6_dataset", "merged_v6_dataset_scaled")
+        process_dataset("merged_v6_dataset", "merged_v6_dataset_scaled", target_count=2000)

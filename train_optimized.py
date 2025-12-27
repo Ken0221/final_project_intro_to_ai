@@ -23,18 +23,19 @@ def train_optimized():
 
     # 2. Load model
     print("Loading YOLO11n...")
-    model = YOLO("yolo11n.pt")
+    # model = YOLO("yolo11n.pt")
+    model = YOLO("merged_v5.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
     
     model.train(
         data=dataset_yaml,
-        epochs=50,
+        epochs=10,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
-        batch=8,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
+        batch=16,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
         device=device,
         workers=2,              # CRITICAL for Windows: avoid multiprocessing errors
         verbose=False,          # CRITICAL: Prevent RecursionError in deepcopy/FLOPs check
@@ -42,7 +43,7 @@ def train_optimized():
         # Augmentation adjustments
         mosaic=1.0,             # Strong spatial augmentation
         mixup=0.15,             # Mixup to help with generalization
-        scale=0.9,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
+        # scale=0.5,              # EXTREME SCALING: 0.9 means images can be sized 0.1x to 1.9x (creates tiny balls)
         
         # Loss adjustments
         box=7.5,                # High box loss gain (focus on accurate bounding boxes)
@@ -52,13 +53,13 @@ def train_optimized():
         lr0=0.001,
         lrf=0.01,
         patience=10,
-        name="yolo11n_highres_balanced_0.9scale_v5",
+        name="yolo11n_highres_balanced_v6_scaled",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/yolo11n_highres_balanced_0.9scale_v5/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/yolo11n_highres_balanced_v6_scaled/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows
