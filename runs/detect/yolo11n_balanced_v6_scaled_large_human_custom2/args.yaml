@@ -2,9 +2,9 @@ task: detect
 mode: train
 model: yolo11n.pt
 data: merged_v6_dataset_scaled/data.yaml
-epochs: 50
+epochs: 100
 time: null
-patience: 10
+patience: 15
 batch: 16
 imgsz: 1280
 save: true

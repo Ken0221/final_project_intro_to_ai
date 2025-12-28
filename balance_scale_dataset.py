@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 import shutil
+from PIL import Image, ImageOps
 
 def scale_image(img, scale):
     """
@@ -223,8 +224,18 @@ names: ['tennisball', 'plastic-bottle', 'person']
 def process_single_image(source_tuple, index, out_img_dir, out_lbl_dir, ranges, remap, apply_scale):
     src_img_path, src_lbl_path, src_cls_id = source_tuple
     
-    img = cv2.imread(str(src_img_path))
-    if img is None: return
+    # img = cv2.imread(str(src_img_path))
+    # if img is None: return
+    
+    # Use PIL to load and fix EXIF rotation
+    try:
+        pil_img = Image.open(str(src_img_path))
+        pil_img = ImageOps.exif_transpose(pil_img) # Fix rotation
+        # Convert RGB (PIL) to BGR (OpenCV)
+        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    except Exception as e:
+        print(f"Error loading {src_img_path}: {e}")
+        return
 
     with open(src_lbl_path, 'r') as f: lines = f.readlines()
 
