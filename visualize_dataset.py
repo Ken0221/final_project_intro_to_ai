@@ -161,4 +161,4 @@ def visualize_dataset(dataset_path, output_dir, grid_size=4, tile_size=640, max_
     print(f"\nSaved {num_batches} grids to '{output_dir}'.")
 
 if __name__ == "__main__":
-    visualize_dataset("tennis_custom_2_dataset", "check_tennis_custom_2", max_grids=375) # Generate up to 50 grids (800 images)
+    visualize_dataset("merged_v6_dataset_scaled", "check_merged_scaled", max_grids=375) # Generate up to 50 grids (800 images)

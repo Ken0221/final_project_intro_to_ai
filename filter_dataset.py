@@ -121,4 +121,4 @@ def filter_dataset(input_dir, output_dir, min_area=400):
     print(f"Saved to {output_dir}")
 
 if __name__ == "__main__":
-    filter_dataset("human_dataset", "human_large_dataset", min_area=400)
+    filter_dataset("human_dataset", "human_large_dataset", min_area=2000)
