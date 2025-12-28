@@ -13,7 +13,7 @@ cache: false
 device: '0'
 workers: 2
 project: null
-name: EXIF_yolo11n_balanced_v6_scaled_large_human_custom2
+name: final_yolo11n_balanced_v6_scaled_large_human_custom2
 exist_ok: true
 pretrained: true
 optimizer: auto
@@ -103,4 +103,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\Users\kenla\Desktop\final_project_intro_to_ai\runs\detect\EXIF_yolo11n_balanced_v6_scaled_large_human_custom2
+save_dir: C:\Users\kenla\Desktop\final_project_intro_to_ai\runs\detect\final_yolo11n_balanced_v6_scaled_large_human_custom2
