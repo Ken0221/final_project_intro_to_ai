@@ -136,5 +136,5 @@ class YOLODetector:
                 else:
                     cls_name = self.model.names[cls_id]
                 
-                attrs.append((cls_name, box.xyxy[0], confidence))
+                attrs.append((cls_name, tuple(map(int, box.xyxy[0])), confidence))
         return attrs

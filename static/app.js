@@ -85,6 +85,14 @@ function initializeSocket() {
         showCountdown(data.seconds);
     });
 
+    // Wrong player warning
+    state.socket.on('wrong_player_warning', (data) => {
+        const overlay = document.getElementById('wrongPlayerOverlay');
+        if (overlay) {
+            overlay.style.display = data.show ? 'flex' : 'none';
+        }
+    });
+
     // Score update notifications
     state.socket.on('score_update', (data) => {
         handleScoreUpdate(data);
@@ -138,6 +146,95 @@ function initializeEventListeners() {
 
     // Results screen
     document.getElementById('playAgainBtn').addEventListener('click', playAgain);
+
+    // Manage Saves Modal
+    document.getElementById('manageSavesBtn').addEventListener('click', openManageSavesModal);
+    document.getElementById('closeManageSavesBtn').addEventListener('click', closeManageSavesModal);
+    document.getElementById('selectAllSaves').addEventListener('change', toggleSelectAllSaves);
+    document.getElementById('deleteSelectedSavesBtn').addEventListener('click', deleteSelectedSaves);
+
+    // Close modal if clicking outside content
+    window.addEventListener('click', (event) => {
+        const modal = document.getElementById('manageSavesModal');
+        if (event.target === modal) {
+            closeManageSavesModal();
+        }
+    });
+
+    // Camera Control (Manual)
+    setupCameraControl('btnPanLeft', 'pan', -1);
+    setupCameraControl('btnPanRight', 'pan', 1);
+    setupCameraControl('btnTiltUp', 'tilt', 1); // Up button -> Angle Decrease (Look Up) = direction 1 (positive logic for button, app handles sign)
+    setupCameraControl('btnTiltDown', 'tilt', -1); // Down button -> Angle Increase (Look Down)
+}
+
+function setupCameraControl(btnId, axis, direction) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    // Helper to send command
+    const sendCmd = (stop = false) => {
+        state.socket.emit('manual_motor_control', {
+            axis: axis,
+            direction: direction,
+            stop: stop
+        });
+    };
+
+    if (axis === 'pan') {
+        // Pan: Hold to move (start on down, stop on up)
+        const startMove = (e) => {
+            e.preventDefault(); // Prevent text selection/scrolling
+            sendCmd(false);
+        };
+        const stopMove = (e) => {
+            e.preventDefault();
+            sendCmd(true);
+        };
+
+        btn.addEventListener('mousedown', startMove);
+        btn.addEventListener('touchstart', startMove);
+
+        // Stop on release or leaving button
+        btn.addEventListener('mouseup', stopMove);
+        btn.addEventListener('mouseleave', stopMove);
+        btn.addEventListener('touchend', stopMove);
+    } else {
+        // Tilt: Hold to move (start on down, stop on up) -> Repeat steps
+        let intervalId = null;
+
+        const startMove = (e) => {
+            e.preventDefault();
+            if (intervalId) return;
+
+            sendCmd(false); // Send immediate first step
+            intervalId = setInterval(() => sendCmd(false), 100); // Repeat every 100ms
+        };
+
+        const stopMove = (e) => {
+            e.preventDefault();
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+            // For tilt, "Stop" command isn't strictly needed as it's positional step, 
+            // but harmless to stop interval. We don't need to send a "Stop" command to backend 
+            // because backend doesn't have "Tilt Speed", only "Tilt Angle".
+            // But let's verify if `sendCmd(true)` does anything for tilt.
+            // Backend `handle_manual_motor_control`: 
+            // `stop = data.get('stop')` 
+            // For tilt, `stop` is currently ignored in backend logic I wrote?
+            // Actually, looking at `app.py`: `stop` is used for Pan. For Tilt, it just steps.
+            // So we just stop the interval.
+        };
+
+        btn.addEventListener('mousedown', startMove);
+        btn.addEventListener('touchstart', startMove);
+
+        btn.addEventListener('mouseup', stopMove);
+        btn.addEventListener('mouseleave', stopMove);
+        btn.addEventListener('touchend', stopMove);
+    }
 }
 
 // ==========================================
@@ -773,6 +870,176 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'slideIn 0.3s ease reverse';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ==========================================
+// Manages Saves Feature
+// ==========================================
+
+async function openManageSavesModal() {
+    const modal = document.getElementById('manageSavesModal');
+    if (modal) {
+        modal.classList.add('active');
+        // Reset state
+        document.getElementById('selectAllSaves').checked = false;
+        document.getElementById('deleteSelectedSavesBtn').disabled = true;
+        document.getElementById('selectedCount').textContent = '0 selected';
+
+        // Fetch data
+        await fetchAndRenderSaves();
+    }
+}
+
+function closeManageSavesModal() {
+    const modal = document.getElementById('manageSavesModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function fetchAndRenderSaves() {
+    const tbody = document.getElementById('saveListBody');
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Loading...</td></tr>';
+
+    try {
+        const response = await fetch('/api/detailed_players');
+        const data = await response.json();
+        const players = data.players || [];
+
+        renderSaveList(players);
+    } catch (error) {
+        console.error('Failed to load saves:', error);
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--error);">Failed to load saves.</td></tr>';
+    }
+}
+
+function renderSaveList(players) {
+    const tbody = document.getElementById('saveListBody');
+    tbody.innerHTML = '';
+
+    if (players.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No saved players found.</td></tr>';
+        return;
+    }
+
+    players.forEach(player => {
+        const tr = document.createElement('tr');
+
+        const checkboxTd = document.createElement('td');
+        checkboxTd.style.textAlign = 'center';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'save-checkbox';
+        checkbox.value = player.name;
+        checkbox.addEventListener('change', updateDeleteButtonState);
+        checkboxTd.appendChild(checkbox);
+
+        const nameTd = document.createElement('td');
+        nameTd.textContent = player.name;
+
+        const dateTd = document.createElement('td');
+        dateTd.textContent = player.created_at;
+
+        tr.appendChild(checkboxTd);
+        tr.appendChild(nameTd);
+        tr.appendChild(dateTd);
+        tbody.appendChild(tr);
+    });
+}
+
+function toggleSelectAllSaves() {
+    const selectAll = document.getElementById('selectAllSaves');
+    const checkboxes = document.querySelectorAll('.save-checkbox');
+
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+
+    updateDeleteButtonState();
+}
+
+function updateDeleteButtonState() {
+    const checkboxes = document.querySelectorAll('.save-checkbox:checked');
+    const count = checkboxes.length;
+    const btn = document.getElementById('deleteSelectedSavesBtn');
+    const countSpan = document.getElementById('selectedCount');
+
+    btn.disabled = count === 0;
+    countSpan.textContent = `${count} selected`;
+
+    // Update "Select All" checkbox state if manual selection changed
+    const allCheckboxes = document.querySelectorAll('.save-checkbox');
+    const selectAll = document.getElementById('selectAllSaves');
+    if (allCheckboxes.length > 0 && count === allCheckboxes.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else if (count > 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    }
+}
+
+async function deleteSelectedSaves() {
+    const checkboxes = document.querySelectorAll('.save-checkbox:checked');
+    const names = Array.from(checkboxes).map(cb => cb.value);
+
+    if (names.length === 0) return;
+
+    if (!confirm(`Are you sure you want to delete ${names.length} player(s)? This cannot be undone.`)) {
+        return;
+    }
+
+    const btn = document.getElementById('deleteSelectedSavesBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Deleting...';
+
+    try {
+        const response = await fetch('/api/delete_players', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ names: names })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast(`Deleted ${result.deleted.length} players`, 'success');
+            if (result.errors && result.errors.length > 0) {
+                console.warn('Errors during deletion:', result.errors);
+                showToast('Some files could not be deleted', 'warning');
+            }
+
+            // Refresh the list in the modal
+            await fetchAndRenderSaves();
+
+            // Refresh the main dropdowns (global refresh)
+            refreshRegisteredPlayers();
+
+            // Reset selection state
+            document.getElementById('selectAllSaves').checked = false;
+            document.getElementById('selectAllSaves').indeterminate = false;
+            updateDeleteButtonState();
+
+        } else {
+            showToast(result.message || 'Deletion failed', 'error');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        showToast('Failed to delete players', 'error');
+    } finally {
+        btn.disabled = false; // Actually it should be disabled if list is empty or nothing selected, but updateDeleteButtonState checks check boxes.
+        // After re-render, no checkboxes are checked, so it will be disabled correctly by `updateDeleteButtonState` call or logic.
+        // But wait, `renderSaveList` creates new check boxes which are unchecked.
+        // So the button should be disabled.
+        btn.innerHTML = originalText;
+        updateDeleteButtonState();
+    }
 }
 
 // ==========================================

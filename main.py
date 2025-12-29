@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--model', type=str, default='yolo11m',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x',
-                                 'yolo12n', 'yolo12s', 'yolo12l', 'balanced_80_1epoch_11n', 'merged_v6_scaled', 'best'],
+                                 'yolo12n', 'yolo12s', 'yolo12l', 'correct_custom_merged_v5'],
                         help='YOLO model to use')
     parser.add_argument('--backbone', type=str, default='resnet101',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
@@ -32,6 +32,8 @@ def main():
                         help='Show everything')
     parser.add_argument('--conf', type=float, default=0.25,
                         help='YOLO confidence threshold')
+    parser.add_argument('--iou', type=float, default=0.45,
+                        help='YOLO IOU threshold')
 
     args = parser.parse_args()
 
@@ -112,7 +114,7 @@ def main():
         cv2.putText(frame, f"FPS: {int(fps)}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # Run YOLOv8 inference on the frame
-        results = yolo.detect(frame, conf=args.conf)
+        results = yolo.detect(frame, conf=args.conf, iou=args.iou)
 
         if show_everything:
             attrs = yolo.get_everything_attr(results)
