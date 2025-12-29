@@ -31,7 +31,7 @@ def train_optimized():
     
     model.train(
         data=dataset_yaml,
-        epochs=100,
+        epochs=20,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
@@ -52,10 +52,11 @@ def train_optimized():
         # cls=1,
         
         # Training mechanics
-        lr0=0.001,
-        # lr0=0.0005,
-        lrf=0.01,
-        # lrf=0.05,
+        optimizer='AdamW', # Force optimizer to respect lr0
+        # lr0=0.001
+        lr0=0.0001,
+        # lrf=0.01,
+        lrf=0.1,
         patience=15,
         name="final_yolo11n_balanced_v7_scaled_large_human_custom2",
         save=True,
