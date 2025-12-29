@@ -9,7 +9,7 @@ def balance_dataset(target_count=4000):
     Balances the merged datasets by upsampling (duplicating) rare classes.
     target_count: int (applied to all) or dict {class_id: count}
     """
-    base_dir = Path("merged_v5_dataset")
+    base_dir = Path("merged_v7_dataset")
     train_dir = base_dir / "train"
     
     if not train_dir.exists():

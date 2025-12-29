@@ -42,7 +42,7 @@ CLASS_MAPPING = {
 
 def merge_datasets():
 
-    output_dir = Path('merged_v6_dataset')
+    output_dir = Path('merged_v7_dataset')
 
     for split in ['train', 'valid']:
         (output_dir / split / 'images').mkdir(parents=True, exist_ok=True)
