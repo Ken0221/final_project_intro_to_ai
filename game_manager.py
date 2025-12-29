@@ -439,6 +439,7 @@ class GameManager:
         info = self.last_throw_info
         player = self.players[info["player_index"]]
         frame = player.frames[info["frame_index"]]
+        is_last_frame = (info["frame_index"] == self.num_frames - 1)
         
         # Update the throw
         if info["throw_num"] == 1:
@@ -454,11 +455,41 @@ class GameManager:
         # Update last throw info
         self.last_throw_info["pins_knocked"] = new_pins_knocked
         
+        # Update standing_bottles_before_throw for the next throw
+        # This is critical: if we corrected throw 1 and the frame isn't complete,
+        # the next throw needs the correct standing bottle count
+        if not frame.is_complete(is_last_frame, self.num_bottles):
+            # Frame not complete, calculate new standing bottles for next throw
+            if info["throw_num"] == 1:
+                # After throw 1, standing = num_bottles - pins_knocked
+                # Unless it's a strike in final frame
+                if is_last_frame and new_pins_knocked == self.num_bottles:
+                    self.standing_bottles_before_throw = self.num_bottles  # Reset for bonus throws
+                else:
+                    self.standing_bottles_before_throw = self.num_bottles - new_pins_knocked
+            elif info["throw_num"] == 2 and is_last_frame:
+                # In final frame, after throw 2 with spare, reset pins
+                if (frame.throw1 or 0) + new_pins_knocked >= self.num_bottles:
+                    self.standing_bottles_before_throw = self.num_bottles
+                else:
+                    self.standing_bottles_before_throw = self.num_bottles - (frame.throw1 or 0) - new_pins_knocked
+        
+        # Calculate standing bottles for display
+        standing_bottles = self.num_bottles - new_pins_knocked
+        if info["throw_num"] == 2:
+            # For throw 2, standing is what's left after both throws
+            standing_bottles = self.num_bottles - (frame.throw1 or 0) - new_pins_knocked
+        elif info["throw_num"] == 3:
+            # For throw 3 in final frame, complex calculation
+            standing_bottles = 0  # Simplified for now
+        
         return {
             "player": player.name,
             "frame": info["frame_index"] + 1,
             "throw": info["throw_num"],
             "new_pins_knocked": new_pins_knocked,
+            "pins_knocked": new_pins_knocked,  # Also include as pins_knocked for frontend compatibility
+            "standing_bottles": max(0, standing_bottles),
             "total_score": player.get_total_score()
         }
     

@@ -265,8 +265,10 @@ function showScreen(screenName, savePrevious = false) {
 
 function toggleSettings() {
     if (state.currentScreen === 'settings') {
-        // If we're in settings, go back to previous screen
+        // If we're in settings, apply settings and go back to previous screen
         if (state.previousScreen) {
+            // Apply settings without resetting game (only runtime settings like ball_tracking_speed)
+            applySettingsWithoutReset();
             showScreen(state.previousScreen);
             state.previousScreen = null;
         }
@@ -276,11 +278,23 @@ function toggleSettings() {
     }
 }
 
+// Apply only runtime settings (without resetting game or reloading models)
+function applySettingsWithoutReset() {
+    const ballTrackingSpeed = parseFloat(document.getElementById('ballTrackingSpeed').value) || 1.4;
+
+    // Send only runtime settings that can be changed mid-game
+    state.socket.emit('update_runtime_settings', {
+        ball_tracking_speed: ballTrackingSpeed
+    });
+
+    showToast('Settings applied', 'success');
+}
+
 function updateSettingsButton() {
     const btn = document.getElementById('settingsBtn');
     if (state.currentScreen === 'settings' && state.previousScreen) {
         btn.textContent = '← Back';
-        btn.title = 'Back to game';
+        btn.title = 'Apply settings and return';
     } else {
         btn.textContent = '⚙️';
         btn.title = 'Settings';
@@ -300,9 +314,10 @@ function startSetup() {
     const comPort = document.getElementById('comPort').value;
     const cameraSource = document.getElementById('cameraSource').value;
     const numFrames = parseInt(document.getElementById('numFrames').value);
-    const numBottles = parseInt(document.getElementById('numBottles').value) || 10;
+    const numBottles = parseInt(document.getElementById('numBottles').value) || 6;
     const yoloModel = document.getElementById('yoloModel').value;
     const reidBackbone = document.getElementById('reidBackbone').value;
+    const ballTrackingSpeed = parseFloat(document.getElementById('ballTrackingSpeed').value) || 1.4;
 
     // Send settings to server
     state.socket.emit('set_settings', {
@@ -311,7 +326,8 @@ function startSetup() {
         num_frames: numFrames,
         num_bottles: numBottles,
         yolo_model: yoloModel,
-        reid_backbone: reidBackbone
+        reid_backbone: reidBackbone,
+        ball_tracking_speed: ballTrackingSpeed
     });
 
     showScreen('registration');
@@ -689,21 +705,44 @@ function showCountdown(seconds) {
 function handleScoreUpdate(data) {
     state.lastThrowInfo = data;
 
+    // Handle both regular score updates (pins_knocked) and corrections (new_pins_knocked)
+    const pinsKnocked = data.pins_knocked !== undefined ? data.pins_knocked : data.new_pins_knocked;
+
     let message = `${data.player}: `;
     if (data.is_strike) {
         message += 'STRIKE! 🎯';
+        // Show big overlay
+        const overlay = document.getElementById('strikeOverlay');
+        if (overlay) {
+            overlay.style.display = 'block';
+            setTimeout(() => { overlay.style.display = 'none'; }, 3000);
+        }
     } else if (data.is_spare) {
         message += 'SPARE! ✨';
+        // Show big overlay
+        const overlay = document.getElementById('spareOverlay');
+        if (overlay) {
+            overlay.style.display = 'block';
+            setTimeout(() => { overlay.style.display = 'none'; }, 3000);
+        }
+    } else if (data.new_pins_knocked !== undefined) {
+        message += `Corrected to ${pinsKnocked} pins`;
     } else {
-        message += `${data.pins_knocked} pins`;
+        message += `${pinsKnocked} pins`;
     }
 
-    showToast(message, 'success');
+    showToast(message, data.new_pins_knocked !== undefined ? 'info' : 'success');
 
-    // Update standing pins display using dynamic num_bottles
-    const standingPins = state.numBottles - data.pins_knocked;
-    document.getElementById('standingPins').textContent =
-        data.is_strike || data.frame_complete ? state.numBottles : standingPins;
+    // Update standing pins display
+    // Use standing_bottles from backend if available (for corrections), otherwise calculate
+    if (data.standing_bottles !== undefined) {
+        document.getElementById('standingPins').textContent =
+            data.is_strike || data.frame_complete ? state.numBottles : data.standing_bottles;
+    } else if (pinsKnocked !== undefined) {
+        const standingPins = state.numBottles - pinsKnocked;
+        document.getElementById('standingPins').textContent =
+            data.is_strike || data.frame_complete ? state.numBottles : Math.max(0, standingPins);
+    }
 }
 
 // ==========================================
@@ -799,6 +838,16 @@ function showResults(data) {
 
         scoresContainer.appendChild(card);
     });
+
+    // Clone the main scoreboard to show detailed validation
+    const mainScoreboard = document.querySelector('.scoreboard');
+    const finalContainer = document.getElementById('finalScoreboardContainer');
+
+    if (mainScoreboard && finalContainer) {
+        finalContainer.innerHTML = ''; // Clear previous
+        const clone = mainScoreboard.cloneNode(true);
+        finalContainer.appendChild(clone);
+    }
 }
 
 function playAgain() {

@@ -42,7 +42,8 @@ class YOLODetector:
             self.CLASS_TENNISBALL = 32  # COCO: sports ball
             # Tennis ball mapping - treat these COCO classes as tennis_ball
             # sports ball (32), frisbee (29), baseball glove (35), apple (47), orange (49)
-            self.TENNIS_BALL_CLASSES = {32, 29, 35, 47, 49}
+            # self.TENNIS_BALL_CLASSES = {32, 29, 35, 47, 49}
+            self.TENNIS_BALL_CLASSES = {32}
             self.is_custom_model = False
             print(f"Using COCO model class mapping: person={self.CLASS_PERSON}, bottle={self.CLASS_BOTTLE}")
         

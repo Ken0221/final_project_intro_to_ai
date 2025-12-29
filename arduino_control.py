@@ -51,17 +51,21 @@ class CameraTracker:
         self.current_tilt_angle = 90  # Start at center position (0-180)
         
         # Dead zone settings (as ratio, error is normalized to -1 ~ 1)
-        self.dead_zone_x = 0.08  # 8% from center
-        self.dead_zone_y = 0.08   # 8% from center
+        self.dead_zone_x = 0.2  # 20% from center
+        self.dead_zone_y = 0.3   # 30% from center
         
         # Speed/angle adjustment settings
         self.max_pan_deviation = 90   # Max deviation from 90 (stop) for pan speed
-        self.pan_speed_factor = self.max_pan_deviation - 35   # org:35. How much error affects pan speed (for sqrt curve)
-        self.tilt_step = 3        # Degrees to move per frame for tilt
+        self.pan_speed_factor = self.max_pan_deviation - 20   # org:35. How much error affects pan speed (for sqrt curve)
+        self.max_tilt_step = 6    # Maximum degrees to move per frame for tilt (when far from center)
+        self.min_tilt_step = 2    # Minimum degrees to move per frame for tilt (when close to center)
         
         # Tilt limits
         self.tilt_min = 0   # Minimum tilt angle (looking up)
         self.tilt_max = 115  # Maximum tilt angle (looking down)
+        
+        # Ball tracking speed (used when ball is far from center)
+        self.ball_tracking_speed = 1.4
         
         # Serial connection
         self.arduino = None
@@ -69,7 +73,7 @@ class CameraTracker:
         
         # Rate limiting - don't send commands too fast
         self.last_command_time = 0
-        self.min_command_interval = 0.033  # 33ms between commands (30 Hz max)
+        self.min_command_interval = 0.05  # 50ms between commands (20 Hz max)
         
         # Last sent values - avoid sending same command repeatedly
         self.last_pan_speed = 90
@@ -243,12 +247,14 @@ class CameraTracker:
             # speed_deviation = (np.tanh(2 * error_x) + 0.25 * error_x)
             # speed_deviation = np.tanh(2 * error_x) + 0.1 * error_x - 0.8 * error_x**3 + 1.2 * error_x**5
             # speed_deviation = (np.tanh(1.4 * error_x) + 0.1 * error_x)
-            if abs(error_x) > 0.5:
-                speed_deviation = np.sign(error_x) * 1.5
-            else:
-                speed_deviation = error_x * 2
+            # if abs(error_x) > 0.8:
+            #     speed_deviation = np.sign(error_x) * self.ball_tracking_speed
+            # else:
+            #     speed_deviation = error_x * 1.2
+            speed_deviation = error_x * self.ball_tracking_speed
         else:
-            speed_deviation = np.tanh(error_x) + 0.3 * error_x**5
+            # speed_deviation = np.tanh(error_x) + 0.3 * error_x**5
+            speed_deviation = np.tanh(error_x)
         
         speed_deviation = speed_deviation * self.pan_speed_factor
         # Constrain deviation
@@ -266,7 +272,7 @@ class CameraTracker:
         # Positive error (object left) -> speed > 90 (rotate left to track)
         # Negative error (object right) -> speed < 90 (rotate right to track)
         pan_speed = 90 + speed_deviation
-        # print(f"Pan Speed Calculation: error_x={error_x:.3f}, speed_deviation={speed_deviation:.2f}, pan_speed={pan_speed:.2f}")
+        # print(f"Is_tennis: {is_tennis}, Player_hold: {player_hold}, Pan Speed Calculation: error_x={error_x:.3f}, speed_deviation={speed_deviation:.2f}, pan_speed={pan_speed:.2f}")
         
         return int(pan_speed)
 
@@ -276,6 +282,7 @@ class CameraTracker:
         Calculate new tilt angle based on vertical error.
 
         Uses incremental updates to smoothly track objects.
+        The step size varies based on error magnitude (larger error = faster movement).
 
         Args:
             error_y (float): Normalized vertical error (-1 to 1)
@@ -289,18 +296,27 @@ class CameraTracker:
         if abs(error_y) < self.dead_zone_y:
             return self.current_tilt_angle
         
+        # Calculate dynamic tilt step based on error magnitude
+        # Interpolate between min_tilt_step and max_tilt_step based on abs(error_y)
+        # abs(error_y) ranges from dead_zone_y to 1.0
+        error_magnitude = abs(error_y)
+        # Normalize error to 0-1 range after dead zone
+        normalized_error = min(1.0, (error_magnitude - self.dead_zone_y) / (1.0 - self.dead_zone_y))
+        # Linear interpolation between min and max tilt step
+        tilt_step = self.min_tilt_step + normalized_error * (self.max_tilt_step - self.min_tilt_step)
+        
         # Incremental adjustment
         # Positive error (object above) -> decrease angle (tilt up)
         # Negative error (object below) -> increase angle (tilt down)
         if error_y > 0:
-            new_angle = self.current_tilt_angle - self.tilt_step
+            new_angle = self.current_tilt_angle - tilt_step
         else:
-            new_angle = self.current_tilt_angle + self.tilt_step
+            new_angle = self.current_tilt_angle + tilt_step
         
         # Constrain to limits
         new_angle = max(self.tilt_min, min(self.tilt_max, new_angle))
         # debug
-        # print(f"New Tilt Angle: {new_angle}")
+        # print(f"New Tilt Angle: {new_angle}, tilt_step: {tilt_step:.2f}")
         return int(new_angle)
     
     def _boxes_overlap(self, box1, box2):

@@ -48,7 +48,7 @@ class AppState:
         self.cap: cv2.VideoCapture = None
         
         self.camera_source = 0
-        self.com_port = "/dev/cu.usbmodem11201"
+        self.com_port = "COM4"
         
         # Model settings
         self.yolo_model = "yolo11s"
@@ -60,8 +60,9 @@ class AppState:
         # hyperparameter
         self.conf = 0.1
         self.iou = 0.55
-        self.manual_pan_speed = 23
+        self.manual_pan_speed = 25
         self.manual_tilt_step = 2
+        self.ball_tracking_speed = 1.2  # Speed when tracking ball far from center
         
         # Current frame data
         self.current_frame = None
@@ -77,7 +78,7 @@ class AppState:
         # Constants for state transitions
         self.BALL_DETECT_THRESHOLD = 3  # Frames to confirm ball detected
         self.BALL_LOST_THRESHOLD = 10   # Frames to confirm ball lost
-        self.BOTTLE_DETECT_THRESHOLD = 5  # Frames to confirm bottles visible
+        self.BOTTLE_DETECT_THRESHOLD = 3  # Frames to confirm bottles visible
         
         # Registration State - stores crops per player per angle
         # {player_num: {'front': crop, 'back': crop, 'left': crop, 'right': crop}}
@@ -210,14 +211,17 @@ def handle_disconnect():
 @socketio.on('set_settings')
 def handle_settings(data):
     """Update game settings"""
-    app_state.com_port = data.get('com_port', '/dev/cu.usbmodem1201')
+    app_state.com_port = data.get('com_port', 'COM4')
     app_state.camera_source = data.get('camera_source', '0')
     num_frames = data.get('num_frames', 10)
-    num_bottles = data.get('num_bottles', 10)
+    num_bottles = data.get('num_bottles', 6)
     
     # Model settings
     app_state.yolo_model = data.get('yolo_model', 'yolo11m')
     app_state.reid_backbone = data.get('reid_backbone', 'resnet50')
+    
+    # Tracking settings
+    app_state.ball_tracking_speed = float(data.get('ball_tracking_speed', 1.4))
     
     # Convert camera source
     if app_state.camera_source.isdigit():
@@ -235,11 +239,26 @@ def handle_settings(data):
     # Initialize components with new settings
     initialize_components(force_reload=True)
     
+    # Apply ball tracking speed to tracker
+    if app_state.tracker:
+        app_state.tracker.ball_tracking_speed = app_state.ball_tracking_speed
+    
     # Start video processing thread
     start_video_thread()
     
     emit('game_state', app_state.game_manager.get_game_state_dict())
     print(f"Settings: COM={app_state.com_port}, Bottles={num_bottles}, YOLO={app_state.yolo_model}")
+
+@socketio.on('update_runtime_settings')
+def handle_runtime_settings(data):
+    """Update runtime settings without resetting the game"""
+    # Ball tracking speed
+    if 'ball_tracking_speed' in data:
+        app_state.ball_tracking_speed = float(data.get('ball_tracking_speed', 1.4))
+        if app_state.tracker:
+            app_state.tracker.ball_tracking_speed = app_state.ball_tracking_speed
+    
+    print(f"Runtime settings updated: ball_tracking_speed={app_state.ball_tracking_speed}")
 
 @socketio.on('register_capture')
 def handle_register_capture(data):
@@ -362,10 +381,10 @@ def handle_select_registered_player(data):
 def handle_start_game():
     """Start the game"""
     if app_state.game_manager.start_game():
-        # Connect to Arduino
-        if app_state.tracker:
+        # Connect to Arduino only if not already connected
+        if app_state.tracker and not app_state.tracker.connected:
             app_state.tracker.connect()
-            emit('arduino_status', {'connected': app_state.tracker.connected})
+        emit('arduino_status', {'connected': app_state.tracker.connected if app_state.tracker else False})
         
         emit('game_state', app_state.game_manager.get_game_state_dict())
         print("Game started!")
@@ -947,7 +966,7 @@ def track_ball(frame, results):
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             else:
                 # 5 seconds passed with no bottles - it's a strike!
-                print("STRIKE DETECTED: No bottles visible after throw!")
+                # print("STRIKE DETECTED: No bottles visible after throw!")
                 app_state.player_left_time = None
                 
                 # Directly record the throw as a strike (0 standing bottles)
@@ -975,8 +994,44 @@ def track_bottles(frame, results):
     gm = app_state.game_manager
     
     # Track bottles with gimbal (use model-specific label)
+    
+    # Track bottles with gimbal (use model-specific label)
     if app_state.tracker:
         bottle_label = app_state.yolo.bottle_label
+        
+        # KEY CHANGE: Check if a person is detected while trying to track bottles
+        # If a person is seen, assume the player walked in front and we should bail out
+        # and go back to tracking variables
+        human_detected = False
+        
+        # Fix: Correctly iterate over Ultralytics results
+        for result in results:
+            for box in result.boxes:
+                cls_id = int(box.cls[0])
+                conf = float(box.conf[0])
+                
+                # Check if detected object is a person
+                if cls_id == app_state.yolo.CLASS_PERSON and conf > app_state.conf:
+                    human_detected = True
+                    break
+            if human_detected:
+                break
+        
+        if human_detected:
+            print("Person detected during bottle countdown! Switching back to TRACKING_PLAYER")
+            gm.state = GameState.TRACKING_PLAYER
+            gm.tracking_target = "person"
+            
+            # Reset bottle tracking counters
+            app_state.bottles_visible_count = 0
+            app_state.counting_start_time = None
+            socketio.emit('countdown', {'seconds': 0}) # clear countdown
+            
+            # Notify frontend
+            socketio.emit('game_state', gm.get_game_state_dict())
+            socketio.emit('toast', {'message': 'Person detected! Resuming player tracking.', 'type': 'info'})
+            return frame
+
         app_state.tracker.camera_track(frame, bottle_label, conf=app_state.conf, iou=app_state.iou)
     
     # # Draw bottles
@@ -1007,10 +1062,10 @@ def count_bottles(frame, results):
     
     # Crop center 2/3 of the frame for more focused detection
     h, w = frame.shape[:2]
-    crop_x1 = w // 6        # 16.7% from left
-    crop_x2 = w * 5 // 6    # 83.3% from left
-    crop_y1 = h // 6        # 16.7% from top
-    crop_y2 = h * 5 // 6    # 83.3% from top
+    crop_x1 = w // 4        # 25% from left (narrower)
+    crop_x2 = w * 3 // 4    # 75% from left (narrower)
+    crop_y1 = h // 5        # 20% from top (slightly tighter)
+    crop_y2 = h * 4 // 5    # 80% from top (slightly tighter)
     
     cropped_frame = frame[crop_y1:crop_y2, crop_x1:crop_x2]
     
@@ -1086,7 +1141,7 @@ def get_standing_bottles(results):
     bottles = app_state.yolo.get_bottles(results)
     standing = []
     
-    STANDING_THRESHOLD = 1.2  # height/width ratio
+    STANDING_THRESHOLD = 2  # height/width ratio
     
     for (x1, y1, x2, y2) in bottles:
         width = x2 - x1

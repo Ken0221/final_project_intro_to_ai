@@ -31,11 +31,11 @@
                 <h2>⚙️ Game Settings</h2>
                 <div class="form-group">
                     <label for="comPort">Arduino COM Port</label>
-                    <input type="text" id="comPort" value="/dev/cu.usbmodem11201" placeholder="/dev/cu.usbmodem1201">
+                    <input type="text" id="comPort" value="COM4" placeholder="COM4">
                 </div>
                 <div class="form-group">
                     <label for="cameraSource">Camera Source</label>
-                    <input type="text" id="cameraSource" value="1" placeholder="0, 1, or video path">
+                    <input type="text" id="cameraSource" value="0" placeholder="0, 1, or video path">
                 </div>
                 <div class="form-group">
                     <label for="yoloModel">YOLO Model</label>
@@ -72,11 +72,18 @@
                 </div>
                 <div class="form-group">
                     <label for="numBottles">Number of Bottles (Pins)</label>
-                    <input type="number" id="numBottles" value="10" min="1" max="20" placeholder="10">
+                    <input type="number" id="numBottles" value="6" min="1" max="20" placeholder="6">
                 </div>
                 <div class="form-group">
                     <label for="numFrames">Number of Frames: <span id="framesValue">10</span></label>
                     <input type="range" id="numFrames" min="1" max="10" value="10">
+                </div>
+                <div class="form-group">
+                    <label for="ballTrackingSpeed">Ball Tracking Speed (0.5 - 3.0)</label>
+                    <input type="number" id="ballTrackingSpeed" value="1.4" min="0.5" max="3.0" step="0.1"
+                        placeholder="1.4">
+                    <small style="color: var(--text-muted); font-size: 0.8em;">Pan speed when ball is far from
+                        center</small>
                 </div>
 
                 <button class="btn btn-primary btn-large" id="startSetupBtn">
@@ -299,6 +306,16 @@
                     <div class="wrong-player-overlay" id="wrongPlayerOverlay" style="display: none;">
                         ⚠️ WRONG PLAYER!
                     </div>
+
+                    <!-- Strike Overlay -->
+                    <div class="strike-overlay" id="strikeOverlay" style="display: none;">
+                        STRIKE! 🎳
+                    </div>
+
+                    <!-- Spare Overlay -->
+                    <div class="spare-overlay" id="spareOverlay" style="display: none;">
+                        SPARE! ✨
+                    </div>
                 </div>
             </div>
         </section>
@@ -310,6 +327,9 @@
                 <h2 id="winnerAnnouncement">Winner: Player 1!</h2>
                 <div class="final-scores" id="finalScores">
                     <!-- Final scores will be inserted here -->
+                </div>
+                <div id="finalScoreboardContainer" class="final-scoreboard-container">
+                    <!-- Detailed scoreboard will be cloned here -->
                 </div>
                 <button class="btn btn-primary btn-large" id="playAgainBtn">
                     🎳 Play Again

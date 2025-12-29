@@ -196,13 +196,15 @@ body {
 }
 
 .btn-icon {
-    width: 40px;
+    min-width: 40px;
     height: 40px;
-    padding: 0;
+    padding: 0 0.75rem;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 50%;
-    font-size: 1.25rem;
+    border-radius: 20px;
+    font-size: 1rem;
+    color: var(--text-primary);
+    white-space: nowrap;
 }
 
 .btn-large {
@@ -660,6 +662,53 @@ body {
     animation: warningPulse 1s infinite;
     pointer-events: none;
     /* Let clicks pass through */
+}
+
+/* Strike Overlay */
+.strike-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(245, 158, 11, 0.95);
+    /* Gold/Orange */
+    color: white;
+    padding: 2rem 3rem;
+    border-radius: var(--radius-lg);
+    font-size: 3rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.6);
+    z-index: 1000;
+    border: 4px solid white;
+    animation: warningPulse 0.5s infinite;
+    /* Faster pulse */
+    pointer-events: none;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Spare Overlay */
+.spare-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(59, 130, 246, 0.95);
+    /* Blue */
+    color: white;
+    padding: 2rem 3rem;
+    border-radius: var(--radius-lg);
+    font-size: 3rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+    z-index: 1000;
+    border: 4px solid white;
+    animation: warningPulse 1s infinite;
+    pointer-events: none;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes warningPulse {
@@ -1352,4 +1401,21 @@ body {
     background: var(--success);
     border-color: var(--success);
     box-shadow: 0 0 8px var(--success);
+}
+
+/* Final Scoreboard in Result Screen */
+.final-scoreboard-container {
+    width: 100%;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.final-scoreboard-container .scoreboard {
+    margin: 0;
+    width: 100%;
 }
