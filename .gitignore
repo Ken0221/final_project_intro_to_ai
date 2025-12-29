@@ -32,7 +32,7 @@ player_db/
 
 # Uncomment if you want to ignore model weights
 *.pt 
-!merged_*.pt
+!*merged_*.pt
 
 
 # test
