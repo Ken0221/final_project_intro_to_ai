@@ -22,9 +22,9 @@ def train_optimized():
         print("Warning: CUDA not found. Training on CPU will be extremely slow.")
 
     # 2. Load model
-    print("Loading YOLO11n...")
+    print("Loading YOLO11s...")
     # model = YOLO("yolo11n.pt")
-    model = YOLO("merged_v5.pt")
+    model = YOLO("merged_v4.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
     print("Starting Optimized Training (1280px)...")
@@ -35,7 +35,7 @@ def train_optimized():
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
-        batch=16,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
+        batch=8,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
         device=device,
         workers=2,              # CRITICAL for Windows: avoid multiprocessing errors
         verbose=False,          # CRITICAL: Prevent RecursionError in deepcopy/FLOPs check
@@ -58,13 +58,13 @@ def train_optimized():
         # lrf=0.01,
         lrf=0.1,
         patience=15,
-        name="final_merged_v5_balanced_v6_scaled_large_human_custom2",
+        name="final_merged_v4_balanced_v6_scaled_large_human_custom2",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/final_merged_v5_balanced_v6_scaled_large_human_custom2/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/final_merged_v4_balanced_v6_scaled_large_human_custom2/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows
