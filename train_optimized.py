@@ -8,7 +8,7 @@ def train_optimized():
     Optimized for Windows and stability.
     """
     # 1. Dataset config
-    dataset_yaml = "merged_v6_dataset_scaled/data.yaml"
+    dataset_yaml = "merged_v7_dataset/data.yaml"
     
     if not os.path.exists(dataset_yaml):
         print(f"Error: {dataset_yaml} not found.")
