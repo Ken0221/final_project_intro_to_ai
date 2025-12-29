@@ -53,7 +53,7 @@ def train_optimized():
         
         # Training mechanics
         optimizer='AdamW', # Force optimizer to respect lr0
-        # lr0=0.001
+        # lr0=0.001,
         lr0=0.0001,
         # lrf=0.01,
         lrf=0.1,
