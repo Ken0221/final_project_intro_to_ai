@@ -301,10 +301,10 @@ def process_single_image(source_tuple, index, out_img_dir, out_lbl_dir, ranges, 
 
 
 if __name__ == "__main__":
-    if not os.path.exists("merged_v6_dataset"):
-        print("Error: merged_v6_dataset not found. Please run merge_datasets.py first.")
+    if not os.path.exists("merged_v7_dataset"):
+        print("Error: merged_v7_dataset not found. Please run merge_datasets.py first.")
     else:
-        # We will output to merged_v6_dataset_scaled to keep original for comparison/debugging
+        # We will output to merged_v7_dataset_scaled to keep original for comparison/debugging
         # or we can overwrite. Let's create a new one to be safe.
         # Example usage with custom counts
         target_counts = {
@@ -312,4 +312,4 @@ if __name__ == "__main__":
             1: 2000, # Bottle
             2: 2000  # Person
         }
-        process_dataset("merged_v6_dataset", "merged_v6_dataset_scaled", target_count=target_counts)
+        process_dataset("merged_v7_dataset", "merged_v7_dataset_scaled", target_count=target_counts)

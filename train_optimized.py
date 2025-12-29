@@ -4,11 +4,11 @@ import torch
 
 def train_optimized():
     """
-    Train YOLO11n with high resolution (1280) and balanced dataset.
+    Train YOLO12n with high resolution (1280) and balanced dataset.
     Optimized for Windows and stability.
     """
     # 1. Dataset config
-    dataset_yaml = "merged_v7_dataset/data.yaml"
+    dataset_yaml = "merged_v7_dataset_scaled/data.yaml"
     
     if not os.path.exists(dataset_yaml):
         print(f"Error: {dataset_yaml} not found.")
@@ -22,8 +22,8 @@ def train_optimized():
         print("Warning: CUDA not found. Training on CPU will be extremely slow.")
 
     # 2. Load model
-    print("Loading YOLO11m...")
-    model = YOLO("yolo11m.pt")
+    print("Loading YOLO12n...")
+    model = YOLO("yolo12n.pt")
     # model = YOLO("merged_v5.pt")
 
     # 3. Train with optimized settings for SMALL OBJECTS
@@ -31,11 +31,11 @@ def train_optimized():
     
     model.train(
         data=dataset_yaml,
-        epochs=20,
+        epochs=60,
         imgsz=1280,             # High resolution for small objects (Crucial)
         
         # Hardware & Stability Settings
-        batch=6,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
+        batch=8,                # Safe for 6-8GB VRAM. If you have 16GB+, try 8 or 16.
         device=device,
         workers=2,              # CRITICAL for Windows: avoid multiprocessing errors
         verbose=False,          # CRITICAL: Prevent RecursionError in deepcopy/FLOPs check
@@ -57,14 +57,15 @@ def train_optimized():
         lr0=0.0001,
         # lrf=0.01,
         lrf=0.1,
+        amp=True,
         patience=15,
-        name="final_yolo11n_balanced_v7_scaled_large_human_custom2",
+        name="final_yolo12n_balanced_v7_scaled_large_human_custom2",
         save=True,
         exist_ok=True,
         pretrained=True
     )
     
-    print("Training Complete. Model saved in runs/detect/final_yolo11n_balanced_v7_scaled_large_human_custom2/weights/best.pt")
+    print("Training Complete. Model saved in runs/detect/final_yolo12s_balanced_v7_scaled_large_human_custom2/weights/best.pt")
 
 if __name__ == "__main__":
     # Fix for MP on Windows
