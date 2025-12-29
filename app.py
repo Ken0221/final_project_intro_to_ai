@@ -56,7 +56,7 @@ class AppState:
         self.video_thread = None
 
         # hyperparameter
-        self.conf = 0.25
+        self.conf = 0.1
         self.iou = 0.55
         
         # Current frame data

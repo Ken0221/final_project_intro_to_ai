@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--model', type=str, default='yolo11m',
                         choices=['yolov8n', 'yolov8s', 'yolov8m', 'yolov8l', 'yolov8x',
                                  'yolo11n', 'yolo11s', 'yolo11m', 'yolo11l', 'yolo11x',
-                                 'yolo12n', 'yolo12s', 'yolo12l', 'balanced_80_1epoch_11n', 'merged_v2'],
+                                 'yolo12n', 'yolo12s', 'yolo12l', 'balanced_80_1epoch_11n', 'merged_v6_scaled', 'best'],
                         help='YOLO model to use')
     parser.add_argument('--backbone', type=str, default='resnet101',
                         choices=['resnet50', 'resnet101', 'convnext_small', 'mobilenetv2'],
